@@ -34,11 +34,11 @@ def _utc(moment: datetime) -> datetime:
 @router.get(
     "/ceilings",
     summary="Lista os tetos disponíveis",
-    description="Opções de tom teto (C2 a C4 na numeração do usuário) e a escolha padrão.",
+    description="Opções de tom teto (C3 a C5, dó central = C4) e a escolha padrão.",
 )
 def list_ceilings() -> CeilingsOut:
-    """Opções da lista de teto, com as duas numerações."""
-    options = [CeilingOut(midi=o.midi, user=o.user, standard=o.standard) for o in ceiling_options()]
+    """Opções da lista de teto."""
+    options = [CeilingOut(midi=o.midi, name=o.name) for o in ceiling_options()]
     return CeilingsOut(options=options, default_midi=DEFAULT_CEILING_MIDI)
 
 

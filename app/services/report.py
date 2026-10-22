@@ -1,15 +1,15 @@
 """Monta o relatório final a partir das features do áudio e do teto escolhido."""
 
 from app.domain.key import detect_key
-from app.domain.notes import pitch_class_name, standard_label, user_label
+from app.domain.notes import note_label, pitch_class_name
 from app.domain.pitch import AudioFeatures
 from app.domain.schemas import KeyOut, NoteOut, RankedNote, Report
 from app.domain.transposition import scale_degree, shift_semitones, transpose_tonic
 
 
 def note_out(midi: int) -> NoteOut:
-    """Nota nas duas numerações."""
-    return NoteOut(midi=midi, user=user_label(midi), standard=standard_label(midi))
+    """Nota com nome e oitava."""
+    return NoteOut(midi=midi, name=note_label(midi))
 
 
 def build_report(features: AudioFeatures, ceiling_midi: int) -> Report:

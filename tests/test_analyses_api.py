@@ -175,7 +175,7 @@ async def test_list_is_newest_first_with_summary(client):
     first = items[0]
     assert first["title"] == "Dois Passarinhos"
     assert first["duration_seconds"] == 120
-    assert first["top_note"]["user"] == "B3"
+    assert first["top_note"]["name"] == "B4"
     assert first["created_at"]
 
 
@@ -191,7 +191,7 @@ async def test_ceilings_endpoint_lists_options(client):
     body = (await client.get("/api/ceilings")).json()
     assert len(body["options"]) == 25
     assert body["default_midi"] == 66
-    assert body["options"][0] == {"midi": 48, "user": "C2", "standard": "C3"}
+    assert body["options"][0] == {"midi": 48, "name": "C3"}
 
 
 async def test_lifespan_creates_database_file(tmp_path, monkeypatch):

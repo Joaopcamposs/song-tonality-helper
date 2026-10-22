@@ -22,7 +22,7 @@ Com Docker: `make up` (mesma porta) e `make down`.
 
 ### Numeração das notas
 
-Existem duas convenções de oitava. A **padrão** (a do librosa) tem o dó central em C4. A **sua** tem o dó central em C3, ou seja, uma oitava abaixo (B3 na sua numeração é B4 no padrão). A lista de teto e o relatório mostram as duas, rotuladas, e o app usa só a padrão por dentro.
+O app usa só a numeração padrão (a do librosa): o dó central é C4. A lista de teto vai de C3 a C5 e o relatório mostra as notas nessa mesma numeração. Se o seu instrumento usa o dó central como C3, some uma oitava ao ler (B4 aqui é B3 no seu).
 
 ### Limites
 
@@ -30,7 +30,7 @@ Existem duas convenções de oitava. A **padrão** (a do librosa) tem o dó cent
 - O tom é detectado por estatística (correlação do chroma com os perfis de Krumhansl) e pode errar, principalmente entre relativos maior/menor ou em músicas com modulação. O deslocamento em semitons não depende dele; só o nome do novo tom.
 - Do seu computador o YouTube costuma liberar o download. Em servidores na nuvem ele bloqueia com frequência, exigindo cookies do navegador, o que é frágil. Por isso o deploy é opcional.
 
-Resultado de referência (aceite): "Dois Passarinhos" (Alan e Aladim), teto F#3 → nota mais aguda B3 (B4 padrão), tom G maior, -5 semitons, novo tom D maior; o topo cai em F#3.
+Resultado de referência (aceite): "Dois Passarinhos" (Alan e Aladim), teto F#4 → nota mais aguda B4, tom G maior, -5 semitons, novo tom D maior; o topo cai em F#4.
 
 ---
 

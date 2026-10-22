@@ -44,7 +44,7 @@ function el(tag, text, className) {
 }
 
 function noteText(note) {
-  return `${note.user} (padrão: ${note.standard})`;
+  return note.name;
 }
 
 function clock(seconds) {
@@ -63,7 +63,7 @@ async function loadCeilings() {
   const saved = Number(readSavedCeiling());
   const wanted = data.options.some((o) => o.midi === saved) ? saved : data.default_midi;
   for (const option of data.options) {
-    const node = el("option", `${option.user} (padrão: ${option.standard})`);
+    const node = el("option", option.name);
     node.value = option.midi;
     node.selected = option.midi === wanted;
     ceilingSelect.append(node);
@@ -84,7 +84,7 @@ function card(...children) {
 
 function noteBox(label, note, className) {
   const box = el("div", undefined, className ? `note ${className}` : "note");
-  box.append(el("span", label), el("b", note.user), el("span", `padrão: ${note.standard}`));
+  box.append(el("span", label), el("b", note.name));
   return box;
 }
 

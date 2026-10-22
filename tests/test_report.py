@@ -18,8 +18,8 @@ def test_dois_passarinhos_report():
     assert report.keys[0].tonic == "G" and report.keys[0].mode == "maior"
     assert report.new_key == "D maior"
     assert report.scale_degree == "3ª"
-    assert (report.top_note.user, report.top_note.standard) == ("B3", "B4")
-    assert report.new_top_note.user == "F#3"
-    assert report.ceiling.user == "F#3"
+    assert report.top_note.name == "B4"
+    assert report.new_top_note.name == "F#4"
+    assert report.ceiling.name == "F#4"
     assert report.top_times == [12.3]
-    assert report.ranking[0].note.user == "B3" and report.ranking[0].frames == 150
+    assert report.ranking[0].note.name == "B4" and report.ranking[0].frames == 150

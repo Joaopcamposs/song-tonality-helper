@@ -7,11 +7,10 @@ from pydantic import BaseModel
 
 
 class NoteOut(BaseModel):
-    """Uma nota nas duas numerações de oitava."""
+    """Uma nota com oitava (dó central = C4)."""
 
     midi: int
-    user: str
-    standard: str
+    name: str
 
 
 class RankedNote(BaseModel):
@@ -82,8 +81,7 @@ class CeilingOut(BaseModel):
     """Uma opção da lista de teto."""
 
     midi: int
-    user: str
-    standard: str
+    name: str
 
 
 class CeilingsOut(BaseModel):
