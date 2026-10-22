@@ -20,6 +20,18 @@ As análises ficam num SQLite em `data/analyses.db` (mude com a variável `DATAB
 
 Com Docker: `make up` (mesma porta) e `make down`.
 
+### API
+
+Documentação interativa em `/docs`.
+
+| Rota | O que faz |
+| --- | --- |
+| `GET /api/ceilings` | Opções de teto e o padrão |
+| `POST /api/analyses` | Pede a análise de um link (200 se já analisado, 202 se vai analisar) |
+| `GET /api/analyses` | Lista as músicas analisadas |
+| `GET /api/analyses/{video_id}` | Status e relatório para o `ceiling_midi` pedido |
+| `DELETE /api/analyses/{video_id}` | Apaga uma música da lista |
+
 ### Numeração das notas
 
 O app usa só a numeração padrão (a do librosa): o dó central é C4. A lista de teto vai de C3 a C5 e o relatório mostra as notas nessa mesma numeração. Se o seu instrumento usa o dó central como C3, some uma oitava ao ler (B4 aqui é B3 no seu).
