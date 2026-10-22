@@ -1,13 +1,28 @@
 """Aplicação FastAPI: expõe a API em /api e serve o front estático."""
 
+import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.routers import analyses
+from app.services import store
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Abre o banco na subida (`DATABASE_PATH`) e fecha as conexões ao desligar."""
+    store.configure(Path(os.environ.get("DATABASE_PATH", "data/analyses.db")))
+    await store.create_tables()
+    yield
+    await store.dispose()
+
 
 app = FastAPI(
+    lifespan=lifespan,
     title="Song Tonality Helper",
     description="Descobre o tom ideal de uma música do YouTube para o seu tom teto.",
 )

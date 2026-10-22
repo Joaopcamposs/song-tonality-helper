@@ -1,8 +1,9 @@
-"""Modelos Pydantic da API: pedido de análise, job e relatório."""
+"""Modelos Pydantic da API: pedido de análise, andamento, lista e relatório."""
 
+from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class NoteOut(BaseModel):
@@ -44,25 +45,37 @@ class Report(BaseModel):
 
 
 class AnalysisRequest(BaseModel):
-    """Pedido de análise: link do YouTube e teto em MIDI (padrão), de C2 a C4 do usuário."""
+    """Pedido de análise: link do YouTube. O teto só entra na consulta do relatório."""
 
     url: str
-    ceiling_midi: int = Field(ge=48, le=72)
 
 
-class JobCreated(BaseModel):
-    """Resposta da criação de um job."""
+class AnalysisCreated(BaseModel):
+    """Resposta do pedido: id do vídeo e se ele já estava analisado."""
 
-    id: str
+    video_id: str
+    already_analyzed: bool
+    analyzed_at: datetime | None = None
 
 
-class JobOut(BaseModel):
-    """Estado de um job de análise."""
+class AnalysisOut(BaseModel):
+    """Estado de uma análise; o relatório vem quando o status é `done`."""
 
-    id: str
+    video_id: str
     status: Literal["downloading", "analyzing", "done", "error"]
     error: str | None = None
+    title: str | None = None
     report: Report | None = None
+
+
+class AnalysisSummary(BaseModel):
+    """Item da lista de músicas já analisadas."""
+
+    video_id: str
+    title: str
+    duration_seconds: int
+    top_note: NoteOut
+    created_at: datetime
 
 
 class CeilingOut(BaseModel):

@@ -1,14 +1,34 @@
-"""Rotas de análise: lista de tetos, criação de job e consulta do resultado."""
+"""Rotas de análise: tetos, pedido de análise, consulta do relatório e lista."""
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from datetime import UTC, datetime
+from typing import Annotated
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.errors import InvalidUrlError
 from app.domain.notes import DEFAULT_CEILING_MIDI, ceiling_options
-from app.domain.schemas import AnalysisRequest, CeilingOut, CeilingsOut, JobCreated, JobOut
-from app.services import jobs
-from app.services.youtube import validate_url
+from app.domain.pitch import ALGO_VERSION
+from app.domain.schemas import (
+    AnalysisCreated,
+    AnalysisOut,
+    AnalysisRequest,
+    AnalysisSummary,
+    CeilingOut,
+    CeilingsOut,
+)
+from app.services import jobs, store
+from app.services.report import build_report, note_out
+from app.services.youtube import parse_video_id
 
 router = APIRouter(prefix="/api", tags=["analyses"])
+
+Session = Annotated[AsyncSession, Depends(store.get_session)]
+
+
+def _utc(moment: datetime) -> datetime:
+    """O SQLite devolve datas sem fuso; elas são sempre UTC."""
+    return moment.replace(tzinfo=UTC)
 
 
 @router.get(
@@ -24,29 +44,69 @@ def list_ceilings() -> CeilingsOut:
 
 @router.post(
     "/analyses",
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Inicia a análise de uma música",
-    description="Recebe o link do YouTube e o teto; devolve o id do job para consulta.",
+    summary="Pede a análise de uma música",
+    description=(
+        "Recebe o link do YouTube. Se o vídeo já foi analisado, responde 200 com "
+        "`already_analyzed` e a data; senão responde 202 e analisa em segundo plano."
+    ),
 )
-def create_analysis(body: AnalysisRequest, background: BackgroundTasks) -> JobCreated:
-    """Valida o link, cria o job e agenda o processamento em segundo plano."""
+async def create_analysis(
+    body: AnalysisRequest, background: BackgroundTasks, response: Response, session: Session
+) -> AnalysisCreated:
+    """Identifica o vídeo, reaproveita a análise guardada ou agenda uma nova."""
     try:
-        url = validate_url(body.url)
+        video_id = parse_video_id(body.url)
     except InvalidUrlError as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, error.message) from error
-    job_id = jobs.create()
-    background.add_task(jobs.run, job_id, url, body.ceiling_midi)
-    return JobCreated(id=job_id)
+    row = await store.find(session, video_id)
+    if row is not None and row.algo_version == ALGO_VERSION:
+        return AnalysisCreated(
+            video_id=video_id, already_analyzed=True, analyzed_at=_utc(row.created_at)
+        )
+    if jobs.start(video_id):
+        background.add_task(jobs.run, video_id)
+    response.status_code = status.HTTP_202_ACCEPTED
+    return AnalysisCreated(video_id=video_id, already_analyzed=False)
 
 
 @router.get(
-    "/analyses/{job_id}",
-    summary="Consulta o resultado de uma análise",
-    description="Devolve o status (baixando, analisando, pronto ou erro) e o relatório pronto.",
+    "/analyses",
+    summary="Lista as músicas já analisadas",
+    description="Das mais recentes para as mais antigas, com título, duração e nota mais aguda.",
 )
-def get_analysis(job_id: str) -> JobOut:
-    """Estado atual do job; 404 se o id não existe."""
-    job = jobs.get(job_id)
-    if job is None:
+async def list_analyses(session: Session) -> list[AnalysisSummary]:
+    """Resumo de cada análise guardada."""
+    return [
+        AnalysisSummary(
+            video_id=row.video_id,
+            title=row.title,
+            duration_seconds=row.duration_seconds,
+            top_note=note_out(row.top_midi),
+            created_at=_utc(row.created_at),
+        )
+        for row in await store.list_recent(session)
+    ]
+
+
+@router.get(
+    "/analyses/{video_id}",
+    summary="Consulta o relatório de uma música",
+    description=(
+        "Devolve o status (baixando, analisando, pronto ou erro) e, se pronto, o relatório "
+        "calculado para o `ceiling_midi` pedido, sem baixar o áudio de novo."
+    ),
+)
+async def get_analysis(
+    video_id: str,
+    session: Session,
+    ceiling_midi: Annotated[int, Query(ge=48, le=72)] = DEFAULT_CEILING_MIDI,
+) -> AnalysisOut:
+    """Estado da análise; 404 se o vídeo nunca foi analisado."""
+    progress = jobs.get(video_id)
+    if progress is not None:
+        return AnalysisOut(video_id=video_id, status=progress.status, error=progress.error)
+    row = await store.find(session, video_id)
+    if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Análise não encontrada.")
-    return JobOut(id=job.id, status=job.status, error=job.error, report=job.report)
+    report = build_report(store.to_features(row), ceiling_midi)
+    return AnalysisOut(video_id=video_id, status="done", title=row.title, report=report)
