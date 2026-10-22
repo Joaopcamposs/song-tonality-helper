@@ -199,3 +199,21 @@ async def test_lifespan_creates_database_file(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_PATH", str(path))
     async with app.router.lifespan_context(app):
         assert path.exists()
+
+
+async def test_failed_reanalysis_keeps_old_report_readable(client, monkeypatch):
+    await _analyze(client)
+    async with store.session() as session:
+        row = await store.find(session, VIDEO_ID)
+        assert row is not None
+        row.algo_version = 0
+        await session.commit()
+
+    def failing(video_id: str, dest_dir: Path) -> DownloadedAudio:
+        raise DownloadError("Não consegui baixar o áudio deste vídeo.")
+
+    monkeypatch.setattr(jobs, "download_audio", failing)
+    assert (await _analyze(client)).status_code == 202
+    body = (await client.get(f"/api/analyses/{VIDEO_ID}")).json()
+    assert body["status"] == "done"
+    assert body["report"] is not None

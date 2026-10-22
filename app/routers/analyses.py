@@ -103,9 +103,10 @@ async def get_analysis(
 ) -> AnalysisOut:
     """Estado da análise; 404 se o vídeo nunca foi analisado."""
     progress = jobs.get(video_id)
-    if progress is not None:
-        return AnalysisOut(video_id=video_id, status=progress.status, error=progress.error)
     row = await store.find(session, video_id)
+    # Erro de uma reanálise não esconde o registro guardado, que continua legível.
+    if progress is not None and not (progress.status == "error" and row is not None):
+        return AnalysisOut(video_id=video_id, status=progress.status, error=progress.error)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Análise não encontrada.")
     report = build_report(store.to_features(row), ceiling_midi)
