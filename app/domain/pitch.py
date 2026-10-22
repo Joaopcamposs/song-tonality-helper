@@ -17,16 +17,18 @@ RANKING_SIZE = 8
 MAX_TIMES = 5
 MIN_RUN_FRAMES = 10  # trechos menores que isso (~0,23 s) não contam como ocorrência
 RUN_GAP_SECONDS = 1.0  # quadros separados por menos que isso formam o mesmo trecho
+# Sobe quando o critério da análise muda, para refazer os registros guardados.
+ALGO_VERSION = 1
 
 
 @dataclass(frozen=True)
 class AudioFeatures:
-    """Resultado da análise: topo da melodia, ranking de notas, tempos e chroma."""
+    """Resultado da análise: topo da melodia, ranking, tempos e perfil médio do chroma."""
 
     top_midi: int
     ranking: list[tuple[int, int]]
     top_times: list[float]
-    chroma: np.ndarray
+    chroma_profile: list[float]  # média do chroma no tempo: 12 valores, um por nota
 
 
 def _melody(y_harmonic: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -96,4 +98,4 @@ def analyze_audio(path: Path) -> AudioFeatures:
 
     top_frames = np.flatnonzero(strong & (rounded == top_midi))
     times = [round(t, 1) for t in _runs(top_frames)[:MAX_TIMES]]
-    return AudioFeatures(top_midi, ranking, times, chroma)
+    return AudioFeatures(top_midi, ranking, times, chroma.mean(axis=1).tolist())

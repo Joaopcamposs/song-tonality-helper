@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
@@ -15,10 +14,10 @@ created_dirs: list[Path] = []
 
 
 def _features() -> AudioFeatures:
-    chroma = np.full((12, 50), 0.05)
+    profile = [0.05] * 12
     for pc, weight in {7: 1.0, 11: 0.8, 2: 0.9, 9: 0.4, 0: 0.5, 4: 0.5, 6: 0.3}.items():
-        chroma[pc, :] = weight
-    return AudioFeatures(top_midi=71, ranking=[(71, 150)], top_times=[12.3], chroma=chroma)
+        profile[pc] = weight
+    return AudioFeatures(top_midi=71, ranking=[(71, 150)], top_times=[12.3], chroma_profile=profile)
 
 
 @pytest.fixture(autouse=True)

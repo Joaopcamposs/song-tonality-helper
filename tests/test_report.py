@@ -1,15 +1,13 @@
-import numpy as np
-
 from app.domain.pitch import AudioFeatures
 from app.services.report import build_report
 
 
 def _g_major_features() -> AudioFeatures:
-    chroma = np.full((12, 50), 0.05)
+    profile = [0.05] * 12
     for pc, weight in {7: 1.0, 11: 0.8, 2: 0.9, 9: 0.4, 0: 0.5, 4: 0.5, 6: 0.3}.items():
-        chroma[pc, :] = weight
+        profile[pc] = weight
     return AudioFeatures(
-        top_midi=71, ranking=[(71, 150), (67, 400)], top_times=[12.3], chroma=chroma
+        top_midi=71, ranking=[(71, 150), (67, 400)], top_times=[12.3], chroma_profile=profile
     )
 
 

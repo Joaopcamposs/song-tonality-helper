@@ -1,5 +1,6 @@
 """Detecção do tom por correlação do chroma com os perfis de Krumhansl-Kessler."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -18,9 +19,9 @@ class KeyCandidate:
     score: float
 
 
-def detect_key(chroma: np.ndarray) -> list[KeyCandidate]:
-    """Os 3 tons mais prováveis para um chroma de 12 linhas, do melhor para o pior."""
-    profile = chroma.mean(axis=1)
+def detect_key(chroma_profile: Sequence[float]) -> list[KeyCandidate]:
+    """Os 3 tons mais prováveis para o perfil médio de 12 notas, do melhor para o pior."""
+    profile = np.asarray(chroma_profile, dtype=float)
     candidates: list[KeyCandidate] = []
     for mode, reference in (("maior", _MAJOR), ("menor", _MINOR)):
         for tonic_pc in range(12):

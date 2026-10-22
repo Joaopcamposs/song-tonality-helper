@@ -1,13 +1,11 @@
-import numpy as np
-
 from app.domain.key import detect_key
 
 
-def _chroma_for(weights: dict[int, float]) -> np.ndarray:
-    chroma = np.full((12, 50), 0.05)
+def _chroma_for(weights: dict[int, float]) -> list[float]:
+    profile = [0.05] * 12
     for pc, weight in weights.items():
-        chroma[pc, :] = weight
-    return chroma
+        profile[pc] = weight
+    return profile
 
 
 def test_detects_g_major():

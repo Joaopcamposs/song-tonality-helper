@@ -14,7 +14,7 @@ def _note(midi: int) -> NoteOut:
 
 def build_report(features: AudioFeatures, ceiling_midi: int) -> Report:
     """Calcula o novo tom, o grau da nota e o resto do relatório."""
-    candidates = detect_key(features.chroma)
+    candidates = detect_key(features.chroma_profile)
     best = candidates[0]
     shift = shift_semitones(features.top_midi, ceiling_midi)
     new_tonic = transpose_tonic(best.tonic_pc, shift)
