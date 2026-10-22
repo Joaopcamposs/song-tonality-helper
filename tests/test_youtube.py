@@ -53,6 +53,8 @@ def fake_ytdlp(monkeypatch):
         "https://music.youtube.com/watch?v=dQw4w9WgXcQ&list=RDAMVM",
         "http://m.youtube.com/watch?v=dQw4w9WgXcQ",
         "https://www.youtube.com/shorts/dQw4w9WgXcQ",
+        "https://www.youtube.com/live/dQw4w9WgXcQ",
+        "https://www.youtube.com/embed/dQw4w9WgXcQ",
     ],
 )
 def test_parse_video_id_accepts_all_link_forms(url):
@@ -109,3 +111,16 @@ def test_download_wraps_ytdlp_errors(tmp_path):
 def test_download_disables_playlist(tmp_path):
     youtube.download_audio(VIDEO_ID, tmp_path)
     assert FakeYoutubeDL.last_opts["noplaylist"] is True
+
+
+@pytest.mark.parametrize(
+    ("url", "word"),
+    [
+        ("https://www.youtube.com/@canal", "canal"),
+        ("https://www.youtube.com/channel/UC123", "canal"),
+        ("https://www.youtube.com/playlist?list=PL123", "playlist"),
+    ],
+)
+def test_parse_video_id_explains_channel_and_playlist_links(url, word):
+    with pytest.raises(InvalidUrlError, match=word):
+        youtube.parse_video_id(url)

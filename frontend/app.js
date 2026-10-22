@@ -3,6 +3,7 @@
 
 const CEILING_KEY = "ceilingMidi";
 const POLL_MS = 2000;
+const FETCH_ATTEMPTS = 3;
 const STATUS_TEXT = {
   downloading: "Baixando o áudio do vídeo...",
   analyzing: "Analisando a melodia e o tom...",
@@ -19,6 +20,7 @@ const noticeBox = document.getElementById("notice");
 const historyList = document.getElementById("history-list");
 
 let currentVideoId = null;
+let activeRun = 0; // cada ação do usuário abre uma execução nova; as anteriores desistem de atualizar a tela
 
 function readSavedCeiling() {
   try {
@@ -153,12 +155,31 @@ function dateText(iso) {
   return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Falha de rede passageira não derruba o acompanhamento: tenta de novo algumas vezes.
+async function fetchWithRetry(url) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetch(url);
+    } catch (error) {
+      if (attempt === FETCH_ATTEMPTS) throw error;
+      await wait(POLL_MS);
+    }
+  }
+}
+
 // Busca o relatório do vídeo para o teto atual; espera enquanto a análise roda.
-async function loadReport(videoId) {
+// Devolve null se outra ação do usuário assumiu a tela no meio do caminho.
+async function loadReport(videoId, run = ++activeRun) {
   const ceiling = Number(ceilingSelect.value);
-  const response = await fetch(`/api/analyses/${videoId}?ceiling_midi=${ceiling}`);
+  const response = await fetchWithRetry(`/api/analyses/${videoId}?ceiling_midi=${ceiling}`);
+  if (run !== activeRun) return null;
   if (!response.ok) throw new Error("Análise não encontrada.");
   const analysis = await response.json();
+  if (run !== activeRun) return null;
   if (analysis.status === "done") {
     statusBox.hidden = true;
     currentVideoId = videoId;
@@ -171,8 +192,8 @@ async function loadReport(videoId) {
   }
   statusBox.textContent = STATUS_TEXT[analysis.status];
   statusBox.hidden = false;
-  await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-  await loadReport(videoId);
+  await wait(POLL_MS);
+  return loadReport(videoId, run);
 }
 
 async function loadHistory() {
@@ -209,6 +230,7 @@ async function openFromHistory(videoId) {
 
 async function analyze(event) {
   event.preventDefault();
+  activeRun++; // interrompe o acompanhamento de qualquer música anterior
   errorBox.hidden = true;
   noticeBox.hidden = true;
   reportBox.hidden = true;

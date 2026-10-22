@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal
 
 from app.domain.errors import DomainError
-from app.domain.pitch import AudioFeatures, analyze_audio
+from app.domain.pitch import ALGO_VERSION, AudioFeatures, analyze_audio
 from app.services import store
 from app.services.youtube import DownloadedAudio, download_audio
 
@@ -37,7 +37,11 @@ def start(video_id: str) -> bool:
     _progress.pop(video_id, None)
     _progress[video_id] = Progress("downloading")
     while len(_progress) > MAX_JOBS:
-        del _progress[next(iter(_progress))]
+        # Só descarta falhas antigas: análise em curso nunca some do andamento.
+        stale = next((key for key, p in _progress.items() if p.status == "error"), None)
+        if stale is None:
+            break
+        del _progress[stale]
     return True
 
 
@@ -57,6 +61,11 @@ def _analyze(video_id: str) -> tuple[DownloadedAudio, AudioFeatures]:
 async def run(video_id: str) -> None:
     """Executa a análise e grava o resultado; em falha, guarda só a mensagem de erro."""
     try:
+        async with store.session() as session:
+            row = await store.find(session, video_id)
+        if row is not None and row.algo_version == ALGO_VERSION:  # outro pedido já terminou
+            del _progress[video_id]
+            return
         audio, features = await asyncio.to_thread(_analyze, video_id)
         async with store.session() as session:
             await store.save(session, video_id, audio.title, audio.duration_seconds, features)

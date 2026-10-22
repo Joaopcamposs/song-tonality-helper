@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 import httpx
@@ -157,14 +158,19 @@ async def test_stale_algo_version_is_reanalyzed(client):
     assert len(downloads) == 2
 
 
-async def test_second_post_while_running_does_not_start_twice(client):
+async def test_simultaneous_posts_download_once(client):
+    responses = await asyncio.gather(_analyze(client), _analyze(client))
+    assert sorted(r.status_code for r in responses) in ([200, 202], [202, 202])
+    assert len(downloads) == 1
+
+
+async def test_run_skips_download_when_analysis_was_saved_meanwhile(client):
+    await _analyze(client)
+    downloads.clear()
     assert jobs.start(VIDEO_ID) is True
-    assert jobs.start(VIDEO_ID) is False
-    assert (await _analyze(client)).status_code == 202
+    await jobs.run(VIDEO_ID)
     assert downloads == []
-    body = (await client.get(f"/api/analyses/{VIDEO_ID}")).json()
-    assert body["status"] == "downloading"
-    assert body["report"] is None
+    assert jobs.get(VIDEO_ID) is None
 
 
 async def test_list_is_newest_first_with_summary(client):
@@ -181,10 +187,19 @@ async def test_list_is_newest_first_with_summary(client):
 
 async def test_old_error_entries_are_discarded(monkeypatch):
     monkeypatch.setattr(jobs, "MAX_JOBS", 2)
-    for video_id in ("aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"):
-        jobs.start(video_id)
+    jobs.start("aaaaaaaaaaa")
+    jobs._progress["aaaaaaaaaaa"] = jobs.Progress("error", "falhou")
+    jobs.start("bbbbbbbbbbb")
+    jobs.start("ccccccccccc")
     assert jobs.get("aaaaaaaaaaa") is None
     assert jobs.get("ccccccccccc") is not None
+
+
+async def test_running_entries_are_never_discarded(monkeypatch):
+    monkeypatch.setattr(jobs, "MAX_JOBS", 2)
+    for video_id in ("aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"):
+        jobs.start(video_id)
+    assert jobs.get("aaaaaaaaaaa") is not None
 
 
 async def test_ceilings_endpoint_lists_options(client):
@@ -197,6 +212,7 @@ async def test_ceilings_endpoint_lists_options(client):
 async def test_lifespan_creates_database_file(tmp_path, monkeypatch):
     path = tmp_path / "x" / "a.db"
     monkeypatch.setenv("DATABASE_PATH", str(path))
+    await store.dispose()  # fecha o engine da fixture antes de o lifespan trocá-lo
     async with app.router.lifespan_context(app):
         assert path.exists()
 
