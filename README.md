@@ -1,5 +1,38 @@
 # song-tonality-helper
 
+Ferramenta pessoal de estudo musical: cole o link de uma música do YouTube, escolha o seu tom teto e o app descobre a nota mais aguda da melodia, o tom original e o tom em que cantá-la para que o topo caia no teto.
+
+## Como usar
+
+Requisitos: [uv](https://docs.astral.sh/uv/) e `ffmpeg` (`brew install ffmpeg`).
+
+```bash
+uv sync
+make run          # http://localhost:8001
+```
+
+1. Cole o link do YouTube (um vídeo de até 10 minutos).
+2. Escolha o seu tom teto na lista (o valor fica salvo no navegador).
+3. Clique em Analisar e leia o relatório: nota mais aguda, tom detectado, deslocamento em semitons, novo tom, grau da nota, trechos em que ela aparece e o ranking das notas.
+
+Com Docker: `make up` (mesma porta) e `make down`.
+
+### Numeração das notas
+
+Existem duas convenções de oitava. A **padrão** (a do librosa) tem o dó central em C4. A **sua** tem o dó central em C3, ou seja, uma oitava abaixo (B3 na sua numeração é B4 no padrão). A lista de teto e o relatório mostram as duas, rotuladas, e o app usa só a padrão por dentro.
+
+### Limites
+
+- O método não separa a voz dos instrumentos: acordeão, segundas vozes e instrumentos agudos podem aparecer como notas altas. Por isso o relatório mostra o ranking das notas, e a nota mais aguda é a mais alta que aparece em pelo menos 100 quadros (cerca de 2,3 s no total).
+- O tom é detectado por estatística (correlação do chroma com os perfis de Krumhansl) e pode errar, principalmente entre relativos maior/menor ou em músicas com modulação. O deslocamento em semitons não depende dele; só o nome do novo tom.
+- Do seu computador o YouTube costuma liberar o download. Em servidores na nuvem ele bloqueia com frequência, exigindo cookies do navegador, o que é frágil. Por isso o deploy é opcional.
+
+Resultado de referência (aceite): "Dois Passarinhos" (Alan e Aladim), teto F#3 → nota mais aguda B3 (B4 padrão), tom G maior, -5 semitons, novo tom D maior; o topo cai em F#3.
+
+---
+
+## Origem da ideia
+
 Principios:
  - util para estudos musicais.
  - ex: preciso estabilizar minha nota mais aguda em uma musica no tom de F#3.
