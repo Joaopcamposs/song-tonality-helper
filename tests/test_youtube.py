@@ -6,16 +6,16 @@ import yt_dlp
 from app.domain.errors import DownloadError, InvalidUrlError, VideoTooLongError
 from app.services import youtube
 
-VALID = "https://www.youtube.com/watch?v=abc123"
+VIDEO_ID = "dQw4w9WgXcQ"
 
 
 class FakeYoutubeDL:
     """Duplo do yt-dlp: devolve metadados fixos e grava um wav vazio ao baixar."""
 
     duration: float | None = 120
-    info_type: str = "video"
     error: Exception | None = None
     last_opts: dict = {}
+    last_url: str = ""
 
     def __init__(self, opts: dict) -> None:
         FakeYoutubeDL.last_opts = opts
@@ -30,9 +30,8 @@ class FakeYoutubeDL:
     def extract_info(self, url: str, download: bool = True) -> dict:
         if self.error:
             raise self.error
-        if self.info_type == "playlist":
-            return {"_type": "playlist", "entries": []}
-        return {"duration": self.duration}
+        FakeYoutubeDL.last_url = url
+        return {"duration": self.duration, "title": "Dois Passarinhos"}
 
     def download(self, urls: list[str]) -> None:
         dest = Path(self.opts["outtmpl"]).parent
@@ -43,72 +42,70 @@ class FakeYoutubeDL:
 def fake_ytdlp(monkeypatch):
     FakeYoutubeDL.duration = 120
     FakeYoutubeDL.error = None
-    FakeYoutubeDL.info_type = "video"
     monkeypatch.setattr(youtube.yt_dlp, "YoutubeDL", FakeYoutubeDL)
 
 
 @pytest.mark.parametrize(
     "url",
     [
-        VALID,
-        "https://youtu.be/abc123",
-        "https://music.youtube.com/watch?v=abc",
-        "http://m.youtube.com/watch?v=abc",
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "https://youtu.be/dQw4w9WgXcQ?t=10",
+        "https://music.youtube.com/watch?v=dQw4w9WgXcQ&list=RDAMVM",
+        "http://m.youtube.com/watch?v=dQw4w9WgXcQ",
+        "https://www.youtube.com/shorts/dQw4w9WgXcQ",
     ],
 )
-def test_validate_url_accepts_youtube_hosts(url):
-    assert youtube.validate_url(url) == url
+def test_parse_video_id_accepts_all_link_forms(url):
+    assert youtube.parse_video_id(url) == VIDEO_ID
 
 
 @pytest.mark.parametrize(
     "url",
     [
         "file:///etc/passwd",
-        "https://evil.com/watch?v=x",
-        "https://youtube.com.evil.com/a",
+        "https://evil.com/watch?v=dQw4w9WgXcQ",
+        "https://youtube.com.evil.com/watch?v=dQw4w9WgXcQ",
         "não é url",
+        "https://www.youtube.com/playlist?list=PL123",
+        "https://www.youtube.com/@canal",
+        "https://www.youtube.com/watch?v=curto",
     ],
 )
-def test_validate_url_rejects_other_hosts_and_schemes(url):
+def test_parse_video_id_rejects(url):
     with pytest.raises(InvalidUrlError):
-        youtube.validate_url(url)
+        youtube.parse_video_id(url)
 
 
-def test_download_returns_wav_in_dest_dir(tmp_path):
-    assert youtube.download_audio(VALID, tmp_path) == tmp_path / "audio.wav"
+def test_download_returns_wav_and_metadata(tmp_path):
+    audio = youtube.download_audio(VIDEO_ID, tmp_path)
+    assert audio.path == tmp_path / "audio.wav"
+    assert (audio.title, audio.duration_seconds) == ("Dois Passarinhos", 120)
+
+
+def test_download_uses_canonical_url(tmp_path):
+    youtube.download_audio(VIDEO_ID, tmp_path)
+    assert FakeYoutubeDL.last_url == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
 
 def test_download_rejects_long_video(tmp_path):
     FakeYoutubeDL.duration = youtube.MAX_DURATION_SECONDS + 1
     with pytest.raises(VideoTooLongError):
-        youtube.download_audio(VALID, tmp_path)
+        youtube.download_audio(VIDEO_ID, tmp_path)
     assert not (tmp_path / "audio.wav").exists()
 
 
 def test_download_rejects_unknown_duration(tmp_path):
     FakeYoutubeDL.duration = None
     with pytest.raises(DownloadError):
-        youtube.download_audio(VALID, tmp_path)
+        youtube.download_audio(VIDEO_ID, tmp_path)
 
 
 def test_download_wraps_ytdlp_errors(tmp_path):
     FakeYoutubeDL.error = yt_dlp.utils.DownloadError("boom")
     with pytest.raises(DownloadError):
-        youtube.download_audio(VALID, tmp_path)
+        youtube.download_audio(VIDEO_ID, tmp_path)
 
 
 def test_download_disables_playlist(tmp_path):
-    youtube.download_audio(VALID, tmp_path)
+    youtube.download_audio(VIDEO_ID, tmp_path)
     assert FakeYoutubeDL.last_opts["noplaylist"] is True
-
-
-def test_download_rejects_playlist_and_channel_links(tmp_path):
-    FakeYoutubeDL.info_type = "playlist"
-    with pytest.raises(InvalidUrlError):
-        youtube.download_audio("https://www.youtube.com/playlist?list=PL123", tmp_path)
-    assert not (tmp_path / "audio.wav").exists()
-
-
-def test_download_resolves_playlists_only_flat(tmp_path):
-    youtube.download_audio(VALID, tmp_path)
-    assert FakeYoutubeDL.last_opts["extract_flat"] == "in_playlist"
