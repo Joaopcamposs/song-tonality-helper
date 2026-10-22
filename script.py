@@ -4,6 +4,7 @@ Usage: python top_note.py song.mp3 G [F4]
   G   = original key of the song
   F4  = your ceiling in standard numbering (C4 = middle C); F4 here = F3 on a C0 keyboard
 """
+
 import sys
 from collections import Counter
 
@@ -19,8 +20,9 @@ def melody_midi(path: str) -> tuple[np.ndarray, np.ndarray]:
     y, sr = librosa.load(path, sr=22050, mono=True)
     y_h, _ = librosa.effects.hpss(y, margin=3.0)  # keep harmonic content, drop drums
     fmin = librosa.note_to_hz("C2")
-    cqt = np.abs(librosa.cqt(y_h, sr=sr, hop_length=HOP, fmin=fmin,
-                             n_bins=BPO * 6, bins_per_octave=BPO))
+    cqt = np.abs(
+        librosa.cqt(y_h, sr=sr, hop_length=HOP, fmin=fmin, n_bins=BPO * 6, bins_per_octave=BPO)
+    )
     cqt = librosa.util.normalize(cqt, axis=0, norm=np.inf)
 
     lo = round(BPO * np.log2(librosa.note_to_hz("E3") / fmin))

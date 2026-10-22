@@ -1,17 +1,13 @@
 # Atalhos de desenvolvimento. Uso: make <alvo>.
-.PHONY: up down db ruff ty
+.PHONY: run test ruff ty up down
 
-# Sobe API e Postgres no Docker (http://localhost:8000), reconstruindo a imagem.
-up:
-	docker compose up -d --build --wait
+# Sobe a API local com recarga automática (http://localhost:8000).
+run:
+	uv run uvicorn app.main:app --reload
 
-# Derruba o ambiente do Docker (os dados do Postgres ficam no volume).
-down:
-	docker compose down
-
-# Sobe só o Postgres de desenvolvimento (para rodar a API local com `make run`).
-db:
-	docker compose up -d --wait postgres
+# Roda só o teste informado: make test T=tests/test_notes.py
+test:
+	uv run pytest -x --tb=short -q $(T)
 
 # Lint + formatação.
 ruff:
@@ -19,4 +15,12 @@ ruff:
 
 # Checagem de tipos.
 ty:
-	uv run ty check app tests scripts
+	uv run ty check app tests
+
+# Sobe a API no Docker (http://localhost:8000), reconstruindo a imagem.
+up:
+	docker build -t song-tonality-helper . && docker run -d --rm --name song-tonality-helper -p 8000:8000 song-tonality-helper
+
+# Derruba o contêiner da API.
+down:
+	docker stop song-tonality-helper

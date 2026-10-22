@@ -1,5 +1,10 @@
-# Imagem da API (e do front estático). Python 3.14 com uv para instalar as dependências.
+# Imagem da API e do front estático. Python 3.14 com uv; ffmpeg é exigido pelo yt-dlp.
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+
+# ffmpeg converte o áudio baixado; libsndfile é usada pelo soundfile.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /srv
 
@@ -13,5 +18,5 @@ COPY frontend ./frontend
 ENV PATH="/srv/.venv/bin:$PATH"
 EXPOSE 8000
 
-# Sobe a API
-CMD ["sh", "-c", "vicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"]
+# Sobe a API.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
