@@ -2,10 +2,14 @@
 
 from fastapi import FastAPI
 
+from app.routers import analyses
+
 app = FastAPI(
     title="Song Tonality Helper",
     description="Descobre o tom ideal de uma música do YouTube para o seu tom teto.",
 )
+
+app.include_router(analyses.router)
 
 
 @app.get(
