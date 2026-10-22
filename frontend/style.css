@@ -43,6 +43,7 @@ button:disabled { opacity: 0.6; cursor: progress; }
 
 #error { color: var(--error); font-weight: 600; }
 #status { color: var(--muted); }
+#notice { color: var(--accent); font-weight: 600; }
 
 .card {
   margin-top: 16px;
@@ -56,3 +57,15 @@ button:disabled { opacity: 0.6; cursor: progress; }
 
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 6px 4px; text-align: left; border-bottom: 1px solid var(--border); }
+
+#history-list { margin: 0; padding: 0; list-style: none; }
+#history-list li { margin-top: 8px; }
+#history-list button {
+  display: block;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+  font-weight: 400;
+}
+#history-list .title { font-weight: 600; }
