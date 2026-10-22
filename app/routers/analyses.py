@@ -111,3 +111,20 @@ async def get_analysis(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Análise não encontrada.")
     report = build_report(store.to_features(row), ceiling_midi)
     return AnalysisOut(video_id=video_id, status="done", title=row.title, report=report)
+
+
+@router.delete(
+    "/analyses/{video_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Apaga uma música da lista",
+    description=(
+        "Remove a análise guardada. Responde 404 se não existe e 409 se a música está "
+        "sendo analisada agora."
+    ),
+)
+async def delete_analysis(video_id: str, session: Session) -> None:
+    """Apaga a análise guardada e o andamento em memória do vídeo."""
+    if not jobs.forget(video_id):
+        raise HTTPException(status.HTTP_409_CONFLICT, "A música está sendo analisada agora.")
+    if not await store.remove(session, video_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Análise não encontrada.")

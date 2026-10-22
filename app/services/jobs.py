@@ -45,6 +45,15 @@ def start(video_id: str) -> bool:
     return True
 
 
+def forget(video_id: str) -> bool:
+    """Esquece a falha guardada do vídeo; devolve False se há análise em curso."""
+    current = _progress.get(video_id)
+    if current is not None and current.status != "error":
+        return False
+    _progress.pop(video_id, None)
+    return True
+
+
 def get(video_id: str) -> Progress | None:
     """Andamento do vídeo, se estiver em análise ou tiver falhado."""
     return _progress.get(video_id)

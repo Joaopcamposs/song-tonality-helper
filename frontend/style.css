@@ -137,10 +137,18 @@ label > input, label > select { margin-top: 6px; color: var(--text); font-weight
 /* Histórico */
 #history { margin-top: 28px; }
 #history-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+#history-list li { position: relative; }
 #history-list button {
   display: block; width: 100%; text-align: left; font-weight: 400;
   background: var(--surface); border-radius: 14px; padding: 12px 14px;
 }
 #history-list button:hover { border-color: var(--accent); }
+#history-list li > button:first-child { padding-right: 96px; }
+#history-list .delete {
+  position: absolute; top: 50%; right: 10px; transform: translateY(-50%);
+  width: auto; padding: 6px 10px; font-size: .8rem; color: var(--muted);
+  background: transparent; border-radius: 10px;
+}
+#history-list .delete:hover { color: var(--danger); border-color: var(--danger); }
 #history-list .title { font-weight: 600; }
 #history-list .meta { color: var(--muted); font-size: .85rem; margin-top: 2px; }

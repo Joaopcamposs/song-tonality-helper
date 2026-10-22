@@ -3,6 +3,7 @@
 
 const CEILING_KEY = "ceilingMidi";
 const POLL_MS = 2000;
+const CONFIRM_MS = 4000;
 const FETCH_ATTEMPTS = 3;
 const STATUS_TEXT = {
   downloading: "Baixando o áudio do vídeo...",
@@ -213,8 +214,49 @@ async function loadHistory() {
     );
     button.addEventListener("click", () => openFromHistory(item.video_id));
     const li = el("li");
-    li.append(button);
+    li.append(button, deleteButton(item));
     historyList.append(li);
+  }
+}
+
+// Dois cliques para apagar: o primeiro pede confirmação e desiste sozinho depois de alguns segundos.
+function deleteButton(item) {
+  const button = el("button", "Apagar", "delete");
+  button.type = "button";
+  button.setAttribute("aria-label", `Apagar ${item.title}`);
+  let timer = null;
+  button.addEventListener("click", async () => {
+    if (timer === null) {
+      button.textContent = "Confirmar?";
+      timer = setTimeout(() => {
+        button.textContent = "Apagar";
+        timer = null;
+      }, CONFIRM_MS);
+      return;
+    }
+    clearTimeout(timer);
+    await deleteAnalysis(item.video_id);
+  });
+  return button;
+}
+
+async function deleteAnalysis(videoId) {
+  errorBox.hidden = true;
+  try {
+    const response = await fetch(`/api/analyses/${videoId}`, { method: "DELETE" });
+    if (!response.ok && response.status !== 404) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(typeof body.detail === "string" ? body.detail : "Não consegui apagar.");
+    }
+    if (videoId === currentVideoId) {
+      activeRun++;
+      currentVideoId = null;
+      reportBox.hidden = true;
+      noticeBox.hidden = true;
+    }
+    await loadHistory();
+  } catch (error) {
+    showError(error.message);
   }
 }
 

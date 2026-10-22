@@ -14,7 +14,7 @@ make run          # http://localhost:8001
 1. Cole o link do YouTube (um vídeo de até 10 minutos).
 2. Escolha o seu tom teto na lista (o valor fica salvo no navegador).
 3. Clique em Analisar e leia o relatório: nota mais aguda, tom detectado, deslocamento em semitons, novo tom, grau da nota, trechos em que ela aparece e o ranking das notas.
-4. A análise fica guardada: colar de novo o mesmo vídeo (em qualquer forma de link) avisa que já foi analisado e mostra o resultado na hora. A lista "Músicas já analisadas" reabre qualquer uma, e trocar o teto recalcula o relatório sem baixar nada.
+4. A análise fica guardada: colar de novo o mesmo vídeo (em qualquer forma de link) avisa que já foi analisado e mostra o resultado na hora. A lista "Músicas já analisadas" reabre qualquer uma, e trocar o teto recalcula o relatório sem baixar nada. O botão "Apagar" (com confirmação) tira a música da lista.
 
 As análises ficam num SQLite em `data/analyses.db` (mude com a variável `DATABASE_PATH`; apague o arquivo para recomeçar). No Docker o banco fica no volume `song-tonality-data`.
 

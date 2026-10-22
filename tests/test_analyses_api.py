@@ -233,3 +233,29 @@ async def test_failed_reanalysis_keeps_old_report_readable(client, monkeypatch):
     body = (await client.get(f"/api/analyses/{VIDEO_ID}")).json()
     assert body["status"] == "done"
     assert body["report"] is not None
+
+
+async def test_delete_removes_from_list_and_report(client):
+    await _analyze(client)
+    await _analyze(client, "https://youtu.be/aaaaaaaaaaa")
+    assert (await client.delete(f"/api/analyses/{VIDEO_ID}")).status_code == 204
+    assert [i["video_id"] for i in (await client.get("/api/analyses")).json()] == ["aaaaaaaaaaa"]
+    assert (await client.get(f"/api/analyses/{VIDEO_ID}")).status_code == 404
+
+
+async def test_delete_unknown_is_404(client):
+    assert (await client.delete(f"/api/analyses/{VIDEO_ID}")).status_code == 404
+
+
+async def test_delete_during_reanalysis_is_409_and_keeps_record(client):
+    await _analyze(client)
+    jobs._progress[VIDEO_ID] = jobs.Progress("analyzing")
+    assert (await client.delete(f"/api/analyses/{VIDEO_ID}")).status_code == 409
+    assert (await client.get("/api/analyses")).json()[0]["video_id"] == VIDEO_ID
+
+
+async def test_delete_then_analyze_again_downloads_again(client):
+    await _analyze(client)
+    await client.delete(f"/api/analyses/{VIDEO_ID}")
+    assert (await _analyze(client)).status_code == 202
+    assert len(downloads) == 2

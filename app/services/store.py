@@ -102,6 +102,16 @@ async def save(
     return row
 
 
+async def remove(session: AsyncSession, video_id: str) -> bool:
+    """Apaga a análise do vídeo; devolve False se não havia registro."""
+    row = await session.get(Analysis, video_id)
+    if row is None:
+        return False
+    await session.delete(row)
+    await session.commit()
+    return True
+
+
 async def list_recent(session: AsyncSession) -> list[Analysis]:
     """Todas as análises, das mais recentes para as mais antigas."""
     result = await session.scalars(select(Analysis).order_by(Analysis.created_at.desc()))
