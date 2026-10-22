@@ -1,5 +1,9 @@
 # Changelog
 
+## Não lançado
+
+- Logo (palheta verde-água com nota e seta para cima) e front redesenhado na mesma linguagem visual do Repertório: tema escuro/claro, resultado em destaque, ranking em barras e lista de músicas em cartões.
+
 ## 0.2.0 — 2026-10-22
 
 - Análises guardadas em SQLite (SQLAlchemy assíncrono): o mesmo vídeo não é baixado nem analisado de novo, e o app avisa quando o link já foi analisado.

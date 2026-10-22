@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="256" height="256" role="img" aria-label="Song Tonality Helper">
+  <title>Song Tonality Helper</title>
+  <!-- Palheta: mesmo contorno do Repertório, em verde-água para distinguir o app irmão. -->
+  <path d="M18.4 28Q16 29.6 13.6 28C8.5 24.5 4 17 4 10a6 6 0 0 1 6-6h12a6 6 0 0 1 6 6c0 7-4.5 14.5-9.6 18z" fill="#2dd4a7"/>
+  <!-- Nota com seta para cima: a música transposta para o seu teto. -->
+  <g fill="#032b21" stroke="#032b21" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="12.4" cy="17.6" rx="3" ry="2.3" transform="rotate(-20 12.4 17.6)" stroke="none"/>
+    <path d="M14.9 16.8V8.6" fill="none" stroke-width="1.8"/>
+    <path d="M19.6 14.2V8.4M17.4 10.4l2.2-2.2 2.2 2.2" fill="none" stroke-width="1.8"/>
+  </g>
+</svg>

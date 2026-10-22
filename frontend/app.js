@@ -82,52 +82,70 @@ function card(...children) {
   return node;
 }
 
+function noteBox(label, note, className) {
+  const box = el("div", undefined, className ? `note ${className}` : "note");
+  box.append(el("span", label), el("b", note.user), el("span", `padrão: ${note.standard}`));
+  return box;
+}
+
+function fact(value, label) {
+  const box = el("div", undefined, "fact");
+  box.append(el("b", value), el("span", label));
+  return box;
+}
+
 function renderReport(r, title) {
   reportBox.replaceChildren();
-  const heading = el("h2", title);
 
-  const main = card(
-    el("div", `Nota mais aguda: ${noteText(r.top_note)}`, "big"),
-    el("p", `Grau dessa nota no tom detectado: ${r.scale_degree}.`),
-    el("p", `Seu teto: ${noteText(r.ceiling)}`, "muted"),
+  const shift = el("div", undefined, "shift");
+  shift.append(el("span", `${signed(r.shift)} semitons`, "shift-value"), el("span", `Novo tom: ${r.new_key}`, "new-key"));
+  const pair = el("div", undefined, "pair");
+  pair.append(noteBox("Nota mais aguda hoje", r.top_note), el("span", "→", "arrow"), noteBox("Depois de transpor", r.new_top_note, "to"));
+  const result = card(
+    el("div", "Resultado", "eyebrow"),
+    el("h2", title, "song"),
+    shift,
+    pair,
+    el("p", `Alternativa: ${signed(r.alternative_shift)} semitons. Seu teto: ${noteText(r.ceiling)}.`, "muted"),
   );
+  result.classList.add("result");
 
   const best = r.keys[0];
   const others = r.keys.slice(1).map((k) => `${k.tonic} ${k.mode}`).join(" ou ");
-  const keyCard = card(
-    el("div", `Tom detectado: ${best.tonic} ${best.mode}`, "big"),
-    el("p", `Outros candidatos: ${others}.`, "muted"),
+  const facts = el("div", undefined, "facts");
+  facts.append(
+    fact(`${best.tonic} ${best.mode}`, "Tom detectado"),
+    fact(r.scale_degree, "Grau da nota mais aguda"),
   );
+  const keyCard = card(facts, el("p", `Outros candidatos: ${others}.`, "muted"));
 
-  const result = card(
-    el("div", `Novo tom: ${r.new_key}`, "big"),
-    el("p", `Deslocamento: ${signed(r.shift)} semitons (alternativa: ${signed(r.alternative_shift)}).`),
-    el("p", `A nota mais aguda passa a ser ${noteText(r.new_top_note)}.`),
-  );
-
+  const chips = el("div", undefined, "chips");
+  for (const t of r.top_times) chips.append(el("span", clock(t), "chip"));
   const times = card(
     el("h2", "Onde a nota mais aguda aparece"),
-    el("p", r.top_times.length ? r.top_times.map(clock).join(" · ") : "Sem trechos marcados."),
+    r.top_times.length ? chips : el("p", "Sem trechos marcados.", "muted"),
   );
 
-  const table = el("table");
-  const head = el("tr");
-  head.append(el("th", "Nota"), el("th", "Quadros"));
-  table.append(head);
-  for (const row of r.ranking) {
-    const tr = el("tr");
-    tr.append(el("td", noteText(row.note)), el("td", String(row.frames)));
-    table.append(tr);
-  }
-  const ranking = card(el("h2", "Ranking das notas mais agudas"), table);
+  const bars = el("div", undefined, "bars");
+  const max = Math.max(...r.ranking.map((row) => row.frames), 1);
+  r.ranking.forEach((row, index) => {
+    const fill = el("div", undefined, "bar-fill");
+    fill.style.width = `${(row.frames / max) * 100}%`;
+    const track = el("div", undefined, "bar-track");
+    track.append(fill);
+    const line = el("div", undefined, index === 0 ? "bar-row peak" : "bar-row");
+    line.append(el("span", noteText(row.note)), track, el("span", String(row.frames), "count"));
+    bars.append(line);
+  });
+  const ranking = card(el("h2", "Ranking das notas mais agudas"), bars);
 
   const warning = el(
     "p",
-    "Aviso: o método não separa a voz dos instrumentos. Acordeão e segundas vozes podem aparecer como notas altas, então confira o ranking. O tom detectado é estatístico e pode errar em músicas com modulação.",
-    "muted",
+    "O método não separa a voz dos instrumentos. Acordeão e segundas vozes podem aparecer como notas altas, então confira o ranking. O tom detectado é estatístico e pode errar em músicas com modulação.",
+    "warning",
   );
 
-  reportBox.append(heading, main, keyCard, result, times, ranking, warning);
+  reportBox.append(result, keyCard, times, ranking, warning);
   reportBox.hidden = false;
 }
 
@@ -170,7 +188,7 @@ async function loadHistory() {
     button.type = "button";
     button.append(
       el("div", item.title, "title"),
-      el("div", `${clock(item.duration_seconds)} · nota mais aguda ${noteText(item.top_note)} · ${dateText(item.created_at)}`, "muted"),
+      el("div", `${clock(item.duration_seconds)} · nota mais aguda ${noteText(item.top_note)} · ${dateText(item.created_at)}`, "meta"),
     );
     button.addEventListener("click", () => openFromHistory(item.video_id));
     const li = el("li");

@@ -2,29 +2,41 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1714">
   <title>Song Tonality Helper</title>
+  <meta name="description" content="Cole o link de uma música do YouTube e descubra em que tom cantá-la para que a nota mais aguda caia no seu teto.">
+  <link rel="icon" href="brand/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <header class="top">
+    <a class="brand" href="/">
+      <img class="pick-logo" src="brand/logo.svg" alt="">
+      <span class="brand-name">Song Tonality Helper</span>
+    </a>
+  </header>
+
   <main>
-    <h1>Song Tonality Helper</h1>
-    <p class="lead">Cole o link de uma música do YouTube e descubra em que tom cantá-la para que a nota mais aguda caia no seu teto.</p>
+    <section class="hero">
+      <h1>Em que tom você canta essa música?</h1>
+      <p class="lead">Cole o link do YouTube e escolha o seu teto. A gente acha a nota mais aguda e diz quanto transpor.</p>
+    </section>
 
-    <form id="form">
-      <label for="url">Link do YouTube</label>
-      <input id="url" type="url" required placeholder="https://www.youtube.com/watch?v=...">
-
-      <label for="ceiling">Meu tom teto</label>
-      <select id="ceiling"></select>
-      <p class="hint">Numeração: a sua (dó central = C3). Entre parênteses, a numeração padrão (dó central = C4).</p>
-
-      <button id="submit" type="submit">Analisar</button>
+    <form id="form" class="panel stack">
+      <label>Link do YouTube
+        <input id="url" type="url" required placeholder="https://www.youtube.com/watch?v=...">
+      </label>
+      <label>Meu tom teto
+        <select id="ceiling"></select>
+      </label>
+      <p class="hint">Numeração: a sua (dó central = C3). Entre parênteses, a padrão (dó central = C4).</p>
+      <button id="submit" class="primary big" type="submit">Analisar</button>
     </form>
 
-    <p id="notice" role="status" hidden></p>
-    <p id="status" role="status" hidden></p>
-    <p id="error" role="alert" hidden></p>
+    <p id="notice" class="banner notice" role="status" hidden></p>
+    <p id="status" class="banner status" role="status" hidden></p>
+    <p id="error" class="banner error" role="alert" hidden></p>
     <section id="report" hidden></section>
 
     <section id="history">
