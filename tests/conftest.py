@@ -3,7 +3,10 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import pytest_asyncio
 import soundfile as sf
+
+from app.services import store
 
 SAMPLE_RATE = 22050
 
@@ -31,3 +34,12 @@ def make_wav(tmp_path: Path) -> Callable[[list[tuple[int | None, float]]], Path]
         return path
 
     return build
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def db(tmp_path: Path):
+    """Banco SQLite novo em arquivo temporário para cada teste."""
+    store.configure(tmp_path / "test.db")
+    await store.create_tables()
+    yield
+    await store.dispose()

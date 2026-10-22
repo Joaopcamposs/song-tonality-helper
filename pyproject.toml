@@ -10,10 +10,18 @@ dependencies = [
     "numpy",
     "scipy",
     "soundfile",
+    "sqlalchemy[asyncio]>=2.1.6",
+    "aiosqlite>=0.22.1",
 ]
 
 [dependency-groups]
-dev = ["pytest", "httpx", "ruff", "ty"]
+dev = [
+    "pytest",
+    "httpx",
+    "ruff",
+    "ty",
+    "pytest-asyncio>=1.4.0",
+]
 
 [tool.ruff]
 line-length = 100
@@ -26,3 +34,4 @@ select = ["E", "F", "I", "UP", "B", "D1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
