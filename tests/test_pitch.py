@@ -1,7 +1,7 @@
 import pytest
 
 from app.domain.errors import NoMelodyError
-from app.domain.pitch import ALGO_VERSION, analyze_audio
+from app.domain.pitch import ALGO_VERSION, analyze_audio, rank_notes
 
 
 def test_top_note_is_highest_sustained(make_wav):
@@ -34,3 +34,11 @@ def test_algo_version_is_defined():
 def test_silence_raises_no_melody(make_wav):
     with pytest.raises(NoMelodyError):
         analyze_audio(make_wav([(None, 5)]))
+
+
+def test_sparse_high_notes_do_not_hide_the_sustained_top():
+    # Contagens reais de "Caso Indefinido": as 8 notas mais altas são esparsas (< 100 quadros).
+    counts = {78: 1, 77: 7, 76: 22, 75: 30, 74: 5, 73: 92, 72: 9, 71: 72, 70: 10, 68: 356, 64: 815}
+    top, ranking = rank_notes(list(counts), list(counts.values()))
+    assert top == 68
+    assert ranking == [(68, 356), (64, 815)]

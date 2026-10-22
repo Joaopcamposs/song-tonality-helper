@@ -2,6 +2,7 @@
 
 ## Não lançado
 
+- Corrige "Não encontrei uma melodia detectável" em músicas com muitas notas agudas esparsas: a nota mais aguda sustentada agora é escolhida entre todas as notas, e o ranking mostra só as sustentadas.
 - Logo (palheta verde-água com nota e seta para cima) e front redesenhado na mesma linguagem visual do Repertório: tema escuro/claro, resultado em destaque, ranking em barras e lista de músicas em cartões.
 
 ## 0.2.0 — 2026-10-22

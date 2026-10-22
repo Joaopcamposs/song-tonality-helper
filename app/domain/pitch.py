@@ -79,6 +79,15 @@ def _runs(frames: np.ndarray) -> list[float]:
     return starts
 
 
+def rank_notes(notes: list[int], counts: list[int]) -> tuple[int, list[tuple[int, int]]]:
+    """Nota mais aguda sustentada (>= MIN_FRAMES) e o ranking das sustentadas, do agudo ao grave."""
+    pairs = zip(notes, counts, strict=True)
+    sustained = sorted([(n, c) for n, c in pairs if c >= MIN_FRAMES], reverse=True)
+    if not sustained:
+        raise NoMelodyError("Não encontrei uma melodia detectável neste áudio.")
+    return sustained[0][0], sustained[:RANKING_SIZE]
+
+
 def analyze_audio(path: Path) -> AudioFeatures:
     """Analisa o arquivo e devolve a nota mais aguda sustentada, o ranking e o chroma."""
     y, _ = librosa.load(path, sr=SAMPLE_RATE, mono=True)
@@ -89,12 +98,7 @@ def analyze_audio(path: Path) -> AudioFeatures:
     strong = confidence > np.percentile(confidence, 60)
     rounded = np.round(midi).astype(int)
     notes, counts = np.unique(rounded[strong], return_counts=True)
-    ranking = sorted(zip(notes.tolist(), counts.tolist(), strict=True), reverse=True)
-    ranking = ranking[:RANKING_SIZE]
-
-    top_midi = next((note for note, frames in ranking if frames >= MIN_FRAMES), None)
-    if top_midi is None:
-        raise NoMelodyError("Não encontrei uma melodia detectável neste áudio.")
+    top_midi, ranking = rank_notes(notes.tolist(), counts.tolist())
 
     top_frames = np.flatnonzero(strong & (rounded == top_midi))
     times = [round(t, 1) for t in _runs(top_frames)[:MAX_TIMES]]
