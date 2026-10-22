@@ -17,9 +17,9 @@ ruff:
 ty:
 	uv run ty check app tests
 
-# Sobe a API no Docker (http://localhost:8001), reconstruindo a imagem.
+# Sobe a API no Docker (http://localhost:8001), reconstruindo a imagem; o banco fica no volume.
 up:
-	docker build -t song-tonality-helper . && docker run -d --rm --name song-tonality-helper -p 8001:8000 song-tonality-helper
+	docker build -t song-tonality-helper . && docker run -d --rm --name song-tonality-helper -p 8001:8000 -v song-tonality-data:/srv/data song-tonality-helper
 
 # Derruba o contêiner da API.
 down:

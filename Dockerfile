@@ -15,7 +15,10 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY app ./app
 COPY frontend ./frontend
 
-ENV PATH="/srv/.venv/bin:$PATH"
+# O banco SQLite fica num volume, para as análises sobreviverem a recriações do contêiner.
+ENV PATH="/srv/.venv/bin:$PATH" \
+    DATABASE_PATH=/srv/data/analyses.db
+VOLUME /srv/data
 EXPOSE 8000
 
 # Sobe a API.

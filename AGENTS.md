@@ -5,8 +5,8 @@ Apresentação do produto em `README.md`; decisões em `docs/superpowers/specs/`
 ## Regras de código
 
 - **Simplicidade primeiro:** sem `Protocol`, interfaces abstratas ou camadas extras até a complexidade pedir. Mudança mínima e focada; não refatore o que não foi pedido.
-- **Estrutura:** `app/routers/` (HTTP; traduz `DomainError` em status), `app/domain/` (regras puras: `notes`, `pitch`, `key`, `transposition`, `errors`, `schemas`), `app/services/` (`youtube`, `jobs`, `report`), `frontend/` (estático), `tests/`. Router só traduz HTTP; sem regra de negócio nele.
-- **Sem banco, login ou histórico:** os jobs vivem em memória e o áudio em diretório temporário, sempre apagado.
+- **Estrutura:** `app/routers/` (HTTP; traduz `DomainError` em status), `app/domain/` (regras puras: `notes`, `pitch`, `key`, `transposition`, `errors`, `schemas`), `app/services/` (`youtube`, `jobs`, `report`, `store`), `frontend/` (estático), `tests/`. Router só traduz HTTP; sem regra de negócio nele.
+- **Persistência:** SQLite com SQLAlchemy assíncrono em `app/services/store.py` (arquivo em `DATABASE_PATH`, padrão `data/`, ignorado no git; sem Alembic). Guarda só as features puras da análise, chaveadas pelo id do vídeo; o relatório é montado na leitura, para o teto pedido. Mudou o critério da análise? Suba `ALGO_VERSION` em `pitch.py`. Andamento e erros ficam em memória (`jobs`); o áudio vive em diretório temporário, sempre apagado. Sem login.
 - **Notas:** o código usa só a numeração padrão (MIDI; dó central = C4 = 60). A numeração do usuário é a padrão menos uma oitava (B4 padrão = B3 do usuário); só a UI e o relatório mostram as duas, rotuladas.
 - **Tipagem:** tudo tipado, sintaxe moderna do Python 3.14 (`list[X]`, `X | None`). Sem `Any` implícito nem `dict` solto onde um modelo cabe.
 - **Erros:** regras violadas são `DomainError` (domínio e serviços); `HTTPException` só nos routers.
