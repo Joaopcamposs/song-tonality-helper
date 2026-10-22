@@ -1,6 +1,9 @@
 """Aplicação FastAPI: expõe a API em /api e serve o front estático."""
 
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.routers import analyses
 
@@ -21,3 +24,7 @@ app.include_router(analyses.router)
 def health() -> dict[str, str]:
     """Resposta fixa usada para checar que o servidor subiu."""
     return {"status": "ok"}
+
+
+# O front estático vai por último para não esconder as rotas de /api.
+app.mount("/", StaticFiles(directory=Path(__file__).parent.parent / "frontend", html=True))

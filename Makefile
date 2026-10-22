@@ -1,9 +1,9 @@
 # Atalhos de desenvolvimento. Uso: make <alvo>.
 .PHONY: run test ruff ty up down
 
-# Sobe a API local com recarga automática (http://localhost:8000).
+# Sobe a API local com recarga automática (http://localhost:8001).
 run:
-	uv run uvicorn app.main:app --reload
+	uv run uvicorn app.main:app --reload --port 8001
 
 # Roda só o teste informado: make test T=tests/test_notes.py
 test:
@@ -17,9 +17,9 @@ ruff:
 ty:
 	uv run ty check app tests
 
-# Sobe a API no Docker (http://localhost:8000), reconstruindo a imagem.
+# Sobe a API no Docker (http://localhost:8001), reconstruindo a imagem.
 up:
-	docker build -t song-tonality-helper . && docker run -d --rm --name song-tonality-helper -p 8000:8000 song-tonality-helper
+	docker build -t song-tonality-helper . && docker run -d --rm --name song-tonality-helper -p 8001:8000 song-tonality-helper
 
 # Derruba o contêiner da API.
 down:
