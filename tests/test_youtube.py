@@ -13,6 +13,7 @@ class FakeYoutubeDL:
     """Duplo do yt-dlp: devolve metadados fixos e grava um wav vazio ao baixar."""
 
     duration: float | None = 120
+    info_type: str = "video"
     error: Exception | None = None
     last_opts: dict = {}
 
@@ -29,6 +30,8 @@ class FakeYoutubeDL:
     def extract_info(self, url: str, download: bool = True) -> dict:
         if self.error:
             raise self.error
+        if self.info_type == "playlist":
+            return {"_type": "playlist", "entries": []}
         return {"duration": self.duration}
 
     def download(self, urls: list[str]) -> None:
@@ -40,6 +43,7 @@ class FakeYoutubeDL:
 def fake_ytdlp(monkeypatch):
     FakeYoutubeDL.duration = 120
     FakeYoutubeDL.error = None
+    FakeYoutubeDL.info_type = "video"
     monkeypatch.setattr(youtube.yt_dlp, "YoutubeDL", FakeYoutubeDL)
 
 
@@ -96,3 +100,15 @@ def test_download_wraps_ytdlp_errors(tmp_path):
 def test_download_disables_playlist(tmp_path):
     youtube.download_audio(VALID, tmp_path)
     assert FakeYoutubeDL.last_opts["noplaylist"] is True
+
+
+def test_download_rejects_playlist_and_channel_links(tmp_path):
+    FakeYoutubeDL.info_type = "playlist"
+    with pytest.raises(InvalidUrlError):
+        youtube.download_audio("https://www.youtube.com/playlist?list=PL123", tmp_path)
+    assert not (tmp_path / "audio.wav").exists()
+
+
+def test_download_resolves_playlists_only_flat(tmp_path):
+    youtube.download_audio(VALID, tmp_path)
+    assert FakeYoutubeDL.last_opts["extract_flat"] == "in_playlist"

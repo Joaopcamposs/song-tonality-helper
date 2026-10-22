@@ -33,6 +33,9 @@ def download_audio(url: str, dest_dir: Path) -> Path:
     url = validate_url(url)
     options = {
         "noplaylist": True,
+        # Link de playlist ou canal é resolvido só em lista rasa, sem extrair cada vídeo.
+        "extract_flat": "in_playlist",
+        "allowed_extractors": ["youtube"],
         "quiet": True,
         "no_warnings": True,
         "format": "bestaudio/best",
@@ -42,6 +45,8 @@ def download_audio(url: str, dest_dir: Path) -> Path:
     try:
         with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=False)
+            if info.get("_type") == "playlist":
+                raise InvalidUrlError("Use o link de um único vídeo, não de playlist ou canal.")
             duration = info.get("duration")
             if duration is None:
                 raise DownloadError("Não consegui saber a duração do vídeo (transmissão ao vivo?).")
