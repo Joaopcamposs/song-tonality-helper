@@ -8,7 +8,8 @@ Requisitos: [uv](https://docs.astral.sh/uv/) e `ffmpeg` (`brew install ffmpeg`).
 
 ```bash
 uv sync
-make run          # http://localhost:8007
+make run          # API em http://localhost:8007
+make worker       # em outro terminal: processa a fila de análises
 ```
 
 1. Cole o link do YouTube (um vídeo de até 10 minutos).
@@ -18,7 +19,17 @@ make run          # http://localhost:8007
 
 As análises e o andamento dos jobs ficam num banco escolhido por `DATABASE_URL`: por padrão SQLite em `data/analyses.db` (`sqlite+aiosqlite:///data/analyses.db`; apague o arquivo para recomeçar), ou Postgres (`postgresql+asyncpg://usuario:senha@host:5432/banco`). No Docker o SQLite fica no volume `song-tonality-data`. Para rodar os testes contra Postgres, defina `TEST_DATABASE_URL` (as tabelas são recriadas a cada teste, use um banco descartável).
 
-Com Docker: `make up` (mesma porta) e `make down`.
+A API só enfileira o pedido (status "na fila"); quem baixa e analisa é o worker (`python -m app.worker`, ou `make worker`). Sem o worker rodando, as análises ficam pendentes.
+
+| Variável | Quem usa | Padrão |
+| --- | --- | --- |
+| `DATABASE_URL` | API e worker (o mesmo banco) | `sqlite+aiosqlite:///data/analyses.db` |
+| `WORKER_POLL_SECONDS` | worker: intervalo entre consultas à fila | `5` |
+| `MAX_REQUESTS_PER_HOUR` | API: novos pedidos por IP por hora (429 ao exceder; reaproveitar análise guardada ou job em curso não conta) | `20` |
+
+API na nuvem + worker em casa: aponte `DATABASE_URL` dos dois para o mesmo Postgres (ex.: Neon). Na nuvem rode só a API; em casa, só o worker (`docker compose up -d --build worker` ou `make worker`), já que o YouTube costuma bloquear IPs de nuvem. O worker só faz conexões de saída, sem túnel. Rode um único worker por banco: ao subir, ele devolve à fila os jobs que ficaram em andamento. Ctrl+C ou SIGTERM encerram depois do job atual.
+
+Com Docker: `make up` sobe só a API (mesma porta); `make down` a derruba. Para API e worker juntos, use `docker compose up -d --build`.
 
 ### API
 
@@ -53,7 +64,7 @@ O app roda em casa (o YouTube costuma bloquear downloads de IPs de nuvem) e vai 
 1. No painel da Cloudflare (Zero Trust > Networks > Tunnels), crie um túnel e copie o token.
 2. No túnel, adicione um *public hostname* (ex.: `song.seudominio.com.br`) com serviço `http://app:8000`.
 3. Copie `.env.example` para `.env` e cole o token em `TUNNEL_TOKEN`.
-4. Suba tudo: `docker compose up -d --build`.
+4. Suba tudo (API, worker e túnel): `docker compose up -d --build`.
 5. Como o app não tem login, proteja o subdomínio em Zero Trust > Access > Applications, liberando só o seu e-mail.
 
 ## Origem da ideia

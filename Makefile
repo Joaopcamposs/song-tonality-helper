@@ -1,9 +1,13 @@
 # Atalhos de desenvolvimento. Uso: make <alvo>.
-.PHONY: run test ruff ty up down
+.PHONY: run worker test ruff ty up down build-up
 
 # Sobe a API local com recarga automática (http://localhost:8007).
 run:
 	uv run uvicorn app.main:app --reload --port 8007
+
+# Sobe o worker local, que processa os jobs pendentes do banco (precisa da API gravando no mesmo DATABASE_URL).
+worker:
+	uv run python -m app.worker
 
 # Roda só o teste informado: make test T=tests/test_notes.py
 test:
@@ -26,5 +30,6 @@ up:
 down:
 	docker stop song-tonality-helper
 
+# Sobe API, worker e túnel pelo compose, reconstruindo a imagem.
 build-up:
 	docker compose up -d --build

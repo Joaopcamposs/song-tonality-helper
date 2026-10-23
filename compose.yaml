@@ -1,4 +1,4 @@
-# Publica o app em casa: a API e o Cloudflare Tunnel, que expõe o app na internet sem abrir portas.
+# Publica o app em casa: a API, o worker que analisa e o Cloudflare Tunnel, que expõe o app na internet sem abrir portas.
 # Uso: copie .env.example para .env, preencha TUNNEL_TOKEN e rode `docker compose up -d --build`.
 services:
   app:
@@ -8,6 +8,16 @@ services:
     ports:
       - "127.0.0.1:8007:8000"
     # O banco SQLite fica no volume, para as análises sobreviverem a recriações.
+    volumes:
+      - song-tonality-data:/srv/data
+
+  # Worker: pega os jobs pendentes do banco, baixa o áudio e analisa. Usa a mesma imagem da API;
+  # numa instalação com API na nuvem, rode só este serviço em casa, com o DATABASE_URL do Postgres.
+  worker:
+    build: .
+    restart: unless-stopped
+    command: python -m app.worker
+    # Compartilha o banco SQLite da API; com Postgres, defina DATABASE_URL nos dois serviços.
     volumes:
       - song-tonality-data:/srv/data
 
