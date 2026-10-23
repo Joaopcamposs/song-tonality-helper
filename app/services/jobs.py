@@ -1,15 +1,16 @@
 """Andamento das análises guardado no banco: fila e reivindicação (a execução fica no worker)."""
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import CursorResult, delete, select, update
+from sqlalchemy import CursorResult, and_, delete, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.store import Job, JobStatus
 
 MAX_JOBS = 50
+STALE_SECONDS = 300  # job em curso sem sinal há tanto tempo foi abandonado (ex.: a API caiu)
 
 
 @dataclass
@@ -89,18 +90,26 @@ async def get(session: AsyncSession, video_id: str) -> Progress | None:
 
 
 async def claim(session: AsyncSession, video_id: str | None = None) -> str | None:
-    """Reivindica um job `pending`, passando-o a `downloading`; None se não há o que pegar.
+    """Reivindica um job `pending` ou abandonado, passando-o a `downloading`; None se não há.
 
-    Sem `video_id`, pega o mais antigo da fila; com ele, só aquele job (None se já foi pego).
+    Abandonado é o job em `downloading`/`analyzing` sem atualização há `STALE_SECONDS`. Sem
+    `video_id`, pega o mais antigo da fila; com ele, só aquele job (None se já foi pego).
     """
-    target = select(Job.video_id).where(Job.status == "pending")
+    available = or_(
+        Job.status == "pending",
+        and_(
+            Job.status.in_(("downloading", "analyzing")),
+            Job.updated_at < now() - timedelta(seconds=STALE_SECONDS),
+        ),
+    )
+    target = select(Job.video_id).where(available)
     if video_id is not None:
         target = target.where(Job.video_id == video_id)
     oldest = target.order_by(Job.updated_at).limit(1).with_for_update(skip_locked=True)
     # A condição repetida no UPDATE garante que só um ganha cada job.
     claimed = await session.scalar(
         update(Job)
-        .where(Job.video_id == oldest.scalar_subquery(), Job.status == "pending")
+        .where(Job.video_id == oldest.scalar_subquery(), available)
         .values(status="downloading", updated_at=now())
         .returning(Job.video_id)
     )

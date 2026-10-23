@@ -1,7 +1,8 @@
 """Worker: processa os jobs pendentes do banco (baixa o áudio, analisa e grava o resultado).
 
-Uso: `python -m app.worker`. Rode um único worker por banco. A API também pode tentar um job
-pelo proxy de `PROXY_*` (`try_with_proxy`, experimento); se falhar, o worker assume.
+Uso: `python -m app.worker`. Rode um único worker por banco. A API também pode extrair um job
+na hora (`extract_in_api`, pedido com `extract_now`), em até `EXTRACT_TIMEOUT_SECONDS`, pelo
+proxy de `PROXY_*` se houver; se falhar ou estourar o prazo, o worker assume.
 """
 
 import asyncio
@@ -12,26 +13,19 @@ import signal
 import tempfile
 from pathlib import Path
 
-from sqlalchemy import delete, update
+from sqlalchemy import delete
 
 from app.domain.errors import DomainError, DownloadError
-from app.domain.features import ALGO_VERSION
+from app.domain.features import ALGO_VERSION, AudioFeatures
 from app.domain.pitch import analyze_audio
 from app.services import jobs, store
-from app.services.download import download_audio, redact
+from app.services.download import DownloadedAudio, download_audio, redact
 from app.services.proxy import ProxyConfig
-from app.services.store import Job, JobStatus
+from app.services.store import Job
 
 logger = logging.getLogger(__name__)
 
-
-async def _set_status(video_id: str, status: JobStatus) -> None:
-    """Atualiza a etapa do job."""
-    async with store.session() as session:
-        await session.execute(
-            update(Job).where(Job.video_id == video_id).values(status=status, updated_at=jobs.now())
-        )
-        await session.commit()
+EXTRACT_TIMEOUT_SECONDS = 60  # prazo de toda a extração (download + análise) feita pela API
 
 
 async def _finish(video_id: str) -> None:
@@ -62,13 +56,27 @@ async def _requeue(video_id: str) -> None:
         await jobs.requeue(session, video_id)
 
 
-async def run(video_id: str, proxy: str | None = None) -> None:
+def _extract(video_id: str, proxy: str | None) -> tuple[DownloadedAudio, AudioFeatures]:
+    """Baixa e analisa o áudio; roda numa thread, que é dona do diretório temporário.
+
+    A thread não pode ser cancelada: se o prazo estourar, ela termina sozinha, apaga o áudio
+    e o resultado é descartado. Por isso nada é gravado aqui.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        audio = download_audio(video_id, Path(tmp), proxy)
+        return audio, analyze_audio(audio.path)
+
+
+async def run(
+    video_id: str, proxy: str | None = None, in_api: bool = False, timeout: float | None = None
+) -> None:
     """Executa um job já reivindicado e grava o resultado; em falha, guarda só o erro.
 
-    Com `proxy` (tentativa da API), falha de download ou erro inesperado devolvem o job à fila em
-    vez de virar erro: o áudio pode estar bloqueado só para o proxy, e o worker local tenta de
-    novo (se também falhar lá, o erro aparece normalmente). Erros de análise seguem o caminho
-    normal, pois o áudio seria o mesmo em qualquer lugar.
+    Com `in_api` (extração feita pela API), falha de download, erro inesperado ou estouro de
+    `timeout` devolvem o job à fila em vez de virar erro: o áudio pode estar bloqueado só ali, e
+    o worker local tenta de novo (se também falhar lá, o erro aparece normalmente). Erros de
+    análise seguem o caminho normal, pois o áudio seria o mesmo em qualquer lugar. A gravação só
+    acontece aqui, depois do prazo, então o resultado tardio de uma thread nunca é gravado.
     """
     try:
         async with store.session() as session:
@@ -76,28 +84,34 @@ async def run(video_id: str, proxy: str | None = None) -> None:
         if row is not None and row.algo_version == ALGO_VERSION:  # outro pedido já terminou
             await _finish(video_id)
             return
-        with tempfile.TemporaryDirectory() as tmp:  # o áudio é sempre apagado
-            audio = await asyncio.to_thread(download_audio, video_id, Path(tmp), proxy)
-            await _set_status(video_id, "analyzing")
-            features = await asyncio.to_thread(analyze_audio, audio.path)
+        audio, features = await asyncio.wait_for(
+            asyncio.to_thread(_extract, video_id, proxy), timeout
+        )
         async with store.session() as session:
             await store.save(session, video_id, audio.title, audio.duration_seconds, features)
         await _finish(video_id)
         logger.info("Análise %s resolvida %s", video_id, "via proxy" if proxy else "via worker")
+    except TimeoutError:
+        if in_api:
+            logger.warning("Extração de %s passou do prazo; fallback para o worker", video_id)
+            await _requeue(video_id)
+        else:
+            logger.exception("Tempo esgotado na análise %s", video_id)
+            await _fail(video_id, "Erro inesperado ao analisar a música.")
     except DomainError as error:
-        if proxy is not None and isinstance(error, DownloadError):
-            logger.warning("Download de %s falhou pelo proxy; fallback para o worker", video_id)
+        if in_api and isinstance(error, DownloadError):
+            logger.warning("Download de %s falhou na API; fallback para o worker", video_id)
             await _requeue(video_id)
         else:
             await _fail(video_id, error.message)
     except Exception as error:
         # Sem traceback quando há proxy: a mensagem da exceção pode conter a URL (segredo).
-        if proxy is None:
+        if proxy is None and not in_api:
             logger.exception("Falha inesperada na análise %s", video_id)
             await _fail(video_id, "Erro inesperado ao analisar a música.")
         else:
             logger.error(
-                "Falha inesperada pelo proxy em %s (%s: %s); fallback para o worker acionado",
+                "Falha inesperada na API em %s (%s: %s); fallback para o worker acionado",
                 video_id,
                 type(error).__name__,
                 redact(str(error), proxy),
@@ -116,17 +130,18 @@ async def process_next() -> bool:
     return True
 
 
-async def try_with_proxy(video_id: str) -> None:
-    """Tenta o job pela API usando o proxy; não faz nada se desligado ou se o worker já o pegou."""
-    proxy = proxy_url()
-    if proxy is None:
-        return
+async def extract_in_api(video_id: str) -> None:
+    """Extrai o job na própria API (pedido com `extract_now`), com prazo de 60 s.
+
+    Usa o proxy `PROXY_*` se configurado, senão sai direto. Não faz nada se o worker já o pegou.
+    """
     async with store.session() as session:
         claimed = await jobs.claim(session, video_id)
     if claimed is None:
         return
-    logger.info("Tentando %s pelo proxy", video_id)
-    await run(video_id, proxy)
+    proxy = proxy_url()
+    logger.info("Extraindo %s na API %s", video_id, "pelo proxy" if proxy else "direto")
+    await run(video_id, proxy, in_api=True, timeout=EXTRACT_TIMEOUT_SECONDS)
 
 
 async def recover_orphans() -> None:

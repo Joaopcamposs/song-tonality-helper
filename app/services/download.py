@@ -14,6 +14,7 @@ from app.domain.errors import DownloadError, VideoTooLongError
 logger = logging.getLogger(__name__)
 
 MAX_DURATION_SECONDS = 600
+SOCKET_TIMEOUT_SECONDS = 20  # evita que uma conexão muda deixe o download pendurado
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,7 @@ def download_audio(video_id: str, dest_dir: Path, proxy: str | None = None) -> D
     options = {
         "noplaylist": True,
         "allowed_extractors": ["youtube"],
+        "socket_timeout": SOCKET_TIMEOUT_SECONDS,
         "quiet": True,
         "no_warnings": True,
         "format": "bestaudio/best",

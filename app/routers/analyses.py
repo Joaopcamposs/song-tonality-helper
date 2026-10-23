@@ -58,8 +58,9 @@ def list_ceilings() -> CeilingsOut:
     summary="Pede a análise de uma música",
     description=(
         "Recebe o link do YouTube. Se o vídeo já foi analisado, responde 200 com "
-        "`already_analyzed` e a data; senão responde 202 e enfileira para o worker "
-        "(com `PROXY_USERNAME` e `PROXY_PASSWORD`, a API tenta antes, pelo proxy). "
+        "`already_analyzed` e a data; senão responde 202 e enfileira para o worker. "
+        "Com `extract_now`, a API tenta extrair em segundo plano por até 60 s (pelo proxy "
+        "`PROXY_*`, se configurado) e, se não der, o job fica na fila para o worker. "
         "Responde 429 se o IP passou do limite de novos pedidos por hora."
     ),
 )
@@ -90,8 +91,8 @@ async def create_analysis(
             )
         if await jobs.start(session, video_id):
             ratelimit.record(client)
-            if worker.proxy_url() is not None:  # experimento: a API tenta antes do worker
-                background.add_task(worker.try_with_proxy, video_id)
+            if body.extract_now:
+                background.add_task(worker.extract_in_api, video_id)
     response.status_code = status.HTTP_202_ACCEPTED
     return AnalysisCreated(video_id=video_id, already_analyzed=False)
 

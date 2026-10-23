@@ -68,12 +68,21 @@ async def test_proxy_off_leaves_job_pending(client, pipeline, monkeypatch):
     assert await _progress() == jobs.Progress("pending")
 
 
+async def test_proxy_on_without_extract_now_leaves_job_pending(client, pipeline, monkeypatch):
+    monkeypatch.setenv("PROXY_USERNAME", "usuario")
+    monkeypatch.setenv("PROXY_PASSWORD", "segredo@123")
+    calls, _ = pipeline
+    await client.post("/api/analyses", json={"url": URL})
+    assert calls == []
+    assert await _progress() == jobs.Progress("pending")
+
+
 async def test_proxy_on_finishes_without_worker(client, pipeline, monkeypatch):
     monkeypatch.setenv("PROXY_USERNAME", "usuario")
     monkeypatch.setenv("PROXY_PASSWORD", "segredo@123")
     monkeypatch.setenv("PROXY_HOST", "proxy.exemplo:8080")
     calls, _ = pipeline
-    await client.post("/api/analyses", json={"url": URL})
+    await client.post("/api/analyses", json={"url": URL, "extract_now": True})
     assert calls == [PROXY]
     assert await _saved()
     assert await _progress() is None
@@ -87,7 +96,7 @@ async def test_download_failure_returns_to_pending_and_worker_finishes(
     monkeypatch.setenv("PROXY_HOST", "proxy.exemplo:8080")
     calls, behavior = pipeline
     behavior["download"] = DownloadError("Não consegui baixar o áudio deste vídeo.")
-    await client.post("/api/analyses", json={"url": URL})
+    await client.post("/api/analyses", json={"url": URL, "extract_now": True})
     assert await _progress() == jobs.Progress("pending")
     assert await worker.process_next() is True
     assert calls == [PROXY, None]
@@ -100,7 +109,7 @@ async def test_analysis_error_is_not_retried_by_worker(client, pipeline, monkeyp
     monkeypatch.setenv("PROXY_HOST", "proxy.exemplo:8080")
     _, behavior = pipeline
     behavior["analyze"] = NoMelodyError("Não encontrei uma melodia detectável.")
-    await client.post("/api/analyses", json={"url": URL})
+    await client.post("/api/analyses", json={"url": URL, "extract_now": True})
     assert await _progress() == jobs.Progress("error", "Não encontrei uma melodia detectável.")
 
 
@@ -110,7 +119,7 @@ async def test_unexpected_error_returns_to_pending(client, pipeline, monkeypatch
     monkeypatch.setenv("PROXY_HOST", "proxy.exemplo:8080")
     _, behavior = pipeline
     behavior["download"] = RuntimeError("quebrou")
-    await client.post("/api/analyses", json={"url": URL})
+    await client.post("/api/analyses", json={"url": URL, "extract_now": True})
     assert await _progress() == jobs.Progress("pending")
 
 
@@ -123,7 +132,7 @@ async def test_job_claimed_by_worker_is_not_touched(pipeline, monkeypatch):
         await jobs.start(session, VIDEO_ID)
     async with store.session() as session:
         assert await jobs.claim(session) == VIDEO_ID  # o worker pegou primeiro
-    await worker.try_with_proxy(VIDEO_ID)
+    await worker.extract_in_api(VIDEO_ID)
     assert calls == []
     assert await _progress() == jobs.Progress("downloading")
 

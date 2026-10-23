@@ -1,11 +1,15 @@
 import asyncio
+from datetime import timedelta
 from pathlib import Path
+
+from sqlalchemy import update
 
 from app import worker
 from app.domain.errors import DownloadError
 from app.domain.features import AudioFeatures
 from app.services import jobs, store
 from app.services.download import DownloadedAudio
+from app.services.store import Job
 
 VIDEO_ID = "dQw4w9WgXcQ"
 
@@ -102,3 +106,38 @@ async def test_job_stuck_by_db_failure_is_requeued_and_finishes(monkeypatch):
     async with store.session() as session:
         assert await store.find(session, VIDEO_ID) is not None
         assert await jobs.get(session, VIDEO_ID) is None
+
+
+async def _age_job(seconds: float) -> None:
+    """Envelhece o `updated_at` do job, simulando um executor que sumiu."""
+    async with store.session() as session:
+        await session.execute(
+            update(Job)
+            .where(Job.video_id == VIDEO_ID)
+            .values(updated_at=jobs.now() - timedelta(seconds=seconds))
+        )
+        await session.commit()
+
+
+async def test_stale_downloading_job_is_claimed(monkeypatch):
+    calls: list[str] = []
+    _fake_pipeline(monkeypatch, calls)
+    await _enqueue()
+    async with store.session() as session:
+        await jobs.claim(session)  # a API caiu no meio da extração
+    await _age_job(jobs.STALE_SECONDS + 10)
+    assert await worker.process_next() is True
+    assert calls == [VIDEO_ID]
+    async with store.session() as session:
+        assert await store.find(session, VIDEO_ID) is not None
+
+
+async def test_recent_downloading_job_is_not_claimed(monkeypatch):
+    calls: list[str] = []
+    _fake_pipeline(monkeypatch, calls)
+    await _enqueue()
+    async with store.session() as session:
+        await jobs.claim(session)
+    await _age_job(jobs.STALE_SECONDS - 60)
+    assert await worker.process_next() is False
+    assert calls == []
