@@ -14,8 +14,8 @@ const EXTRACT_KEY = "extractNow";
 const BACKGROUND_TEXT = "Pedido recebido: a música está sendo processada em segundo plano. Quando ficar pronta, ela aparece na lista de músicas analisadas.";
 const SLOW_TEXT = "Está demorando: o worker pode estar desligado.";
 const EXTRACT_LABEL = {
-  true: "Tenta na hora (até 60 s); se não der, vai para o worker",
-  false: "Vai para a fila do worker",
+  true: "Extrair agora (até 60 s; se não der, vai para o worker)",
+  false: "Enviar para o worker (processa em segundo plano)",
 };
 const STATUS_TEXT = {
   pending: "Na fila, aguardando o worker...",
