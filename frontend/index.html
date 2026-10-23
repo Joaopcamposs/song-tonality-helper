@@ -23,7 +23,21 @@
   <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="locked">
+  <section id="gate" class="gate" hidden>
+    <form id="gate-form" class="panel stack">
+      <div class="gate-brand">
+        <img class="pick-logo" src="brand/logo.svg" alt="">
+        <span class="brand-name">Song Tonality Helper</span>
+      </div>
+      <label><span id="gate-message">Digite a palavra secreta:</span>
+        <input id="gate-input" type="password" required autocomplete="current-password">
+      </label>
+      <button class="primary big" type="submit">Entrar</button>
+    </form>
+  </section>
+
+  <div id="app" hidden inert>
   <header class="top">
     <a class="brand" href="/">
       <img class="pick-logo" src="brand/logo.svg" alt="">
@@ -58,10 +72,14 @@
     <section id="report" hidden></section>
 
     <section id="history">
-      <h2>Músicas já analisadas</h2>
+      <div class="history-head">
+        <h2>Músicas já analisadas</h2>
+        <button id="history-refresh" class="small" type="button">Atualizar</button>
+      </div>
       <ul id="history-list"></ul>
     </section>
   </main>
+  </div>
   <script src="app.js"></script>
 </body>
 </html>

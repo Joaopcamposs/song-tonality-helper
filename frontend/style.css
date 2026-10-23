@@ -138,7 +138,15 @@ label > input, label > select { margin-top: 6px; color: var(--text); font-weight
 
 /* Histórico */
 #history { margin-top: 28px; }
-#history-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.history-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.history-head h2 { margin: 0; }
+button.small { min-height: 34px; padding: 4px 12px; font-size: .85rem; }
+#history-list {
+  margin: 0; padding: 8px; list-style: none; display: grid; gap: 8px; align-content: start;
+  max-height: min(50vh, 22rem); overflow-y: auto; overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;  background: var(--bg); border: 1px solid var(--line); border-radius: 16px;
+}
+#history-list button.selected { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
 #history-list li { position: relative; }
 #history-list button {
   display: block; width: 100%; text-align: left; font-weight: 400;
@@ -154,3 +162,8 @@ label > input, label > select { margin-top: 6px; color: var(--text); font-weight
 #history-list .delete:hover { color: var(--danger); border-color: var(--danger); }
 #history-list .title { font-weight: 600; }
 #history-list .meta { color: var(--muted); font-size: .85rem; margin-top: 2px; }
+
+/* Tela da palavra secreta: só ela aparece até a API aceitar a primeira chamada. */
+.gate { min-height: 100dvh; display: grid; place-items: center; padding: 16px; }
+.gate .panel { width: 100%; max-width: 380px; }
+.gate-brand { display: flex; align-items: center; justify-content: center; gap: 10px; }

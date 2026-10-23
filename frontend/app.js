@@ -5,6 +5,8 @@ const CEILING_KEY = "ceilingMidi";
 const PASSPHRASE_KEY = "passphrase";
 const PASSPHRASE_HEADER = "X-App-Passphrase";
 const POLL_MS = 2000;
+const HISTORY_POLL_MS = 10000;
+const HISTORY_MAX_FAILURES = 3;
 const CONFIRM_MS = 4000;
 const FETCH_ATTEMPTS = 3;
 const SLOW_MS = 5 * 60 * 1000;
@@ -31,6 +33,12 @@ const errorBox = document.getElementById("error");
 const reportBox = document.getElementById("report");
 const noticeBox = document.getElementById("notice");
 const historyList = document.getElementById("history-list");
+const historyRefresh = document.getElementById("history-refresh");
+const appBox = document.getElementById("app");
+const gate = document.getElementById("gate");
+const gateForm = document.getElementById("gate-form");
+const gateInput = document.getElementById("gate-input");
+const gateMessage = document.getElementById("gate-message");
 
 let currentVideoId = null;
 let activeRun = 0; // cada ação do usuário abre uma execução nova; as anteriores desistem de atualizar a tela
@@ -92,30 +100,42 @@ function savePassphrase(value) {
 let passphrase = readSavedPassphrase();
 let passphraseAsk = null; // pedido de palavra em andamento, compartilhado pelas chamadas simultâneas
 
-// Mostra o campo da palavra secreta e devolve o que a pessoa digitar.
+// Mostra a tela só com o campo da palavra secreta e devolve o que a pessoa digitar.
 function askPassphrase(message) {
   if (passphraseAsk) return passphraseAsk;
   passphraseAsk = new Promise((resolve) => {
-    const input = el("input");
-    input.type = "password";
-    input.required = true;
-    input.autocomplete = "current-password";
-    const label = el("label", message);
-    label.append(input);
-    const button = el("button", "Entrar", "primary big");
-    button.type = "submit";
-    const panel = el("form", undefined, "panel stack");
-    panel.append(label, button);
-    panel.addEventListener("submit", (event) => {
-      event.preventDefault();
-      panel.remove();
-      passphraseAsk = null;
-      resolve(input.value);
-    });
-    document.querySelector("main").prepend(panel);
-    input.focus();
+    lock();
+    gateMessage.textContent = message;
+    gateInput.value = "";
+    gateInput.focus();
+    gateForm.addEventListener(
+      "submit",
+      (event) => {
+        event.preventDefault();
+        passphraseAsk = null;
+        resolve(gateInput.value);
+      },
+      { once: true },
+    );
   });
   return passphraseAsk;
+}
+
+// Esconde o app (hidden + inert: fora do foco e dos leitores de tela) e mostra só a palavra secreta.
+function lock() {
+  appBox.hidden = true;
+  appBox.inert = true;
+  gate.hidden = false;
+  document.body.classList.add("locked");
+}
+
+// Primeira chamada aceita: revela o app e some com a tela da palavra.
+function unlock() {
+  if (!appBox.hidden) return;
+  gate.hidden = true;
+  appBox.hidden = false;
+  appBox.inert = false;
+  document.body.classList.remove("locked");
 }
 
 // fetch da API: manda a palavra secreta guardada e, se a API recusar (401), pede de novo e reenvia.
@@ -125,7 +145,10 @@ async function api(url, options = {}) {
     const headers = { ...options.headers };
     if (passphrase) headers[PASSPHRASE_HEADER] = passphrase;
     const response = await fetch(url, { ...options, headers });
-    if (response.status !== 401) return response;
+    if (response.status !== 401) {
+      if (response.ok) unlock();
+      return response;
+    }
     if (passphrase !== sent) continue; // outra chamada já trocou a palavra: só reenvia
     const message = passphrase ? "Palavra secreta recusada. Digite de novo:" : "Digite a palavra secreta:";
     passphrase = "";
@@ -281,6 +304,8 @@ async function loadReport(videoId, run = ++activeRun, started = Date.now()) {
     statusBox.hidden = true;
     currentVideoId = videoId;
     renderReport(analysis.report, analysis.title);
+    markSelected();
+    refreshHistory(); // o worker pode ter acabado de gravar esta música: a lista pega na hora
     return;
   }
   if (analysis.status === "error") {
@@ -294,9 +319,22 @@ async function loadReport(videoId, run = ++activeRun, started = Date.now()) {
   return loadReport(videoId, run, started);
 }
 
-async function loadHistory() {
-  const response = await api("/api/analyses");
-  const items = await response.json();
+let historyKey = null; // ids e títulos da lista desenhada; só redesenha quando muda
+let historyBusy = false;
+let historyFailures = 0;
+
+// Destaca na lista a música aberta no relatório.
+function markSelected() {
+  for (const button of historyList.querySelectorAll("li > button:first-child")) {
+    button.classList.toggle("selected", button.dataset.videoId === currentVideoId);
+  }
+}
+
+function renderHistory(items) {
+  const key = JSON.stringify(items.map((item) => [item.video_id, item.title]));
+  if (key === historyKey) return;
+  historyKey = key;
+  const scroll = historyList.scrollTop;
   historyList.replaceChildren();
   if (items.length === 0) {
     historyList.append(el("li", "Nenhuma música analisada ainda.", "muted"));
@@ -305,6 +343,7 @@ async function loadHistory() {
   for (const item of items) {
     const button = el("button");
     button.type = "button";
+    button.dataset.videoId = item.video_id;
     button.append(
       el("div", item.title, "title"),
       el("div", `${clock(item.duration_seconds)} · nota mais aguda ${noteText(item.top_note)} · ${dateText(item.created_at)}`, "meta"),
@@ -314,6 +353,32 @@ async function loadHistory() {
     li.append(button, deleteButton(item));
     historyList.append(li);
   }
+  markSelected();
+  historyList.scrollTop = scroll;
+}
+
+// Busca a lista sem sobrepor chamadas. Erro 429/401 repetido (ou de rede) suspende o polling automático.
+async function refreshHistory({ manual = false } = {}) {
+  if (manual) historyFailures = 0;
+  if (historyBusy) return;
+  historyBusy = true;
+  try {
+    const response = await api("/api/analyses");
+    if (!response.ok) throw new Error(String(response.status));
+    renderHistory(await response.json());
+    historyFailures = 0;
+  } catch (error) {
+    historyFailures++;
+    if (manual) showError("Não consegui carregar a lista de músicas.");
+  } finally {
+    historyBusy = false;
+  }
+}
+
+function pollHistory() {
+  if (document.visibilityState !== "visible" || appBox.hidden) return;
+  if (historyFailures >= HISTORY_MAX_FAILURES) return;
+  refreshHistory();
 }
 
 // Dois cliques para apagar: o primeiro pede confirmação e desiste sozinho depois de alguns segundos.
@@ -351,7 +416,7 @@ async function deleteAnalysis(videoId) {
       reportBox.hidden = true;
       noticeBox.hidden = true;
     }
-    await loadHistory();
+    await refreshHistory();
   } catch (error) {
     showError(error.message);
   }
@@ -392,7 +457,7 @@ async function analyze(event) {
       noticeBox.hidden = false;
     }
     await loadReport(created.video_id);
-    await loadHistory();
+    await refreshHistory();
   } catch (error) {
     showError(error.message);
   } finally {
@@ -416,4 +481,9 @@ extractNow.addEventListener("change", () => {
 ceilingSelect.addEventListener("change", onCeilingChange);
 form.addEventListener("submit", analyze);
 loadCeilings().catch(() => showError("Não consegui carregar a lista de tetos."));
-loadHistory().catch(() => showError("Não consegui carregar a lista de músicas."));
+refreshHistory({ manual: true });
+historyRefresh.addEventListener("click", () => refreshHistory({ manual: true }));
+setInterval(pollHistory, HISTORY_POLL_MS);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && !appBox.hidden) refreshHistory({ manual: true });
+});
