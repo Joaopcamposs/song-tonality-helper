@@ -8,15 +8,11 @@ dependencies = [
     "numpy",
     "sqlalchemy[asyncio]>=2.1.6",
     "asyncpg>=0.32.0",
-]
-
-# Só o worker baixa e analisa áudio; a API (nuvem) instala sem este extra.
-[project.optional-dependencies]
-worker = [
     "yt-dlp",
     "librosa",
     "scipy",
     "soundfile",
+    "imageio-ffmpeg",
 ]
 
 [dependency-groups]

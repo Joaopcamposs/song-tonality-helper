@@ -5,8 +5,7 @@
 export DATABASE_URL ?= postgresql+asyncpg://postgres:dev@localhost:5432/song_tonality
 # Banco separado para os testes, porque a fixture apaga o schema a cada teste.
 export TEST_DATABASE_URL ?= postgresql+asyncpg://postgres:dev@localhost:5432/song_tonality_test
-# yt-dlp e librosa são do extra `worker`; localmente sincroniza com ele (a nuvem instala sem).
-UV_RUN = uv run --extra worker
+UV_RUN = uv run
 
 # Sobe só o Postgres do compose e garante o banco de testes (idempotente).
 db:
