@@ -7,7 +7,7 @@ Ferramenta pessoal de estudo musical: cole o link de uma música do YouTube, esc
 Requisitos: [uv](https://docs.astral.sh/uv/), `ffmpeg` (`brew install ffmpeg`) e Docker (para o Postgres local).
 
 ```bash
-uv sync
+uv sync --extra worker   # sem o extra só a API roda (é o que a nuvem instala)
 make db           # Postgres do compose (porta 5432); `run`, `worker` e `test` já o sobem
 make run          # API em http://localhost:8007
 make worker       # em outro terminal: processa a fila de análises

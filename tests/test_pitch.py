@@ -1,7 +1,8 @@
 import pytest
 
 from app.domain.errors import NoMelodyError
-from app.domain.pitch import ALGO_VERSION, analyze_audio, rank_notes
+from app.domain.features import ALGO_VERSION
+from app.domain.pitch import analyze_audio, rank_notes
 
 
 def test_top_note_is_highest_sustained(make_wav):

@@ -2,6 +2,7 @@
 
 ## Não lançado
 
+- **Dependências separadas:** `yt-dlp`, `librosa`, `scipy` e `soundfile` foram para o extra `worker`; a API (e o deploy na nuvem) instala sem eles e `import app.main` não os carrega (há teste). A execução do job passou de `jobs.run` para `worker.run`; `ALGO_VERSION` e `AudioFeatures` ficam em `app/domain/features.py` e o download em `app/services/download.py`. Localmente use `uv sync --extra worker` (o Makefile já faz via `uv run --extra worker`).
 - Configuração para o FastAPI Cloud: `[tool.fastapi]` no `pyproject.toml`, `fastapi[standard]`, alvo `make deploy` e seção no README.
 - **Correções da revisão:** limite de pedidos e bloqueio por senha errada agora usam o IP de `CF-Connecting-IP` (atrás do Cloudflare Tunnel); o worker devolve à fila o job que ficou preso após falha do banco; o contador de limites descarta IPs expirados; cabeçalho de senha fora de latin-1 dá 401, não 500 (use senha ASCII).
 - **Só Postgres:** o SQLite e o `aiosqlite` foram removidos. `DATABASE_URL` (`postgresql+asyncpg://...`) agora é obrigatória; o `compose.yaml` ganhou o serviço `db` (postgres:17, volume `song-tonality-db`) de que API e worker dependem, e `make db` o sobe sozinho. `make run`, `make worker` e `make test` usam o Postgres local por padrão. Dados do antigo `data/analyses.db` não são migrados.

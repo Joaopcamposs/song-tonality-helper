@@ -1,4 +1,4 @@
-from app.domain.pitch import AudioFeatures
+from app.domain.features import AudioFeatures
 from app.services.report import build_report
 
 

@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.domain.errors import DomainError
-from app.domain.pitch import ALGO_VERSION, AudioFeatures
+from app.domain.features import ALGO_VERSION, AudioFeatures
 
 # Schema próprio no Postgres, para dividir o banco com outros apps.
 SCHEMA = "song-tonality-helper"

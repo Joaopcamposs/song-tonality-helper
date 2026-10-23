@@ -1,4 +1,6 @@
-"""Worker local: puxa jobs pendentes do banco, baixa o áudio, analisa e grava o resultado.
+"""Worker local (único que usa yt-dlp e librosa): processa os jobs pendentes do banco.
+
+Baixa o áudio, analisa e grava o resultado.
 
 Uso: `python -m app.worker`. Rode um único worker por banco.
 """
@@ -8,10 +10,63 @@ import contextlib
 import logging
 import os
 import signal
+import tempfile
+from pathlib import Path
 
+from sqlalchemy import delete, update
+
+from app.domain.errors import DomainError
+from app.domain.features import ALGO_VERSION
+from app.domain.pitch import analyze_audio
 from app.services import jobs, store
+from app.services.download import download_audio
+from app.services.store import Job, JobStatus
 
 logger = logging.getLogger(__name__)
+
+
+async def _set_status(video_id: str, status: JobStatus) -> None:
+    """Atualiza a etapa do job."""
+    async with store.session() as session:
+        await session.execute(
+            update(Job).where(Job.video_id == video_id).values(status=status, updated_at=jobs.now())
+        )
+        await session.commit()
+
+
+async def _finish(video_id: str) -> None:
+    """Apaga o job concluído."""
+    async with store.session() as session:
+        await session.execute(delete(Job).where(Job.video_id == video_id))
+        await session.commit()
+
+
+async def _fail(video_id: str, message: str) -> None:
+    """Abre uma sessão própria para registrar a falha."""
+    async with store.session() as session:
+        await jobs.fail(session, video_id, message)
+
+
+async def run(video_id: str) -> None:
+    """Executa um job já reivindicado e grava o resultado; em falha, guarda só o erro."""
+    try:
+        async with store.session() as session:
+            row = await store.find(session, video_id)
+        if row is not None and row.algo_version == ALGO_VERSION:  # outro pedido já terminou
+            await _finish(video_id)
+            return
+        with tempfile.TemporaryDirectory() as tmp:  # o áudio é sempre apagado
+            audio = await asyncio.to_thread(download_audio, video_id, Path(tmp))
+            await _set_status(video_id, "analyzing")
+            features = await asyncio.to_thread(analyze_audio, audio.path)
+        async with store.session() as session:
+            await store.save(session, video_id, audio.title, audio.duration_seconds, features)
+        await _finish(video_id)
+    except DomainError as error:
+        await _fail(video_id, error.message)
+    except Exception:
+        logger.exception("Falha inesperada na análise %s", video_id)
+        await _fail(video_id, "Erro inesperado ao analisar a música.")
 
 
 async def process_next() -> bool:
@@ -21,7 +76,7 @@ async def process_next() -> bool:
     if video_id is None:
         return False
     logger.info("Analisando %s", video_id)
-    await jobs.run(video_id)
+    await run(video_id)
     return True
 
 

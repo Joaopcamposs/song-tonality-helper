@@ -4,7 +4,7 @@ import pytest
 import yt_dlp
 
 from app.domain.errors import DownloadError, InvalidUrlError, VideoTooLongError
-from app.services import youtube
+from app.services import download, youtube
 
 VIDEO_ID = "dQw4w9WgXcQ"
 
@@ -42,7 +42,7 @@ class FakeYoutubeDL:
 def fake_ytdlp(monkeypatch):
     FakeYoutubeDL.duration = 120
     FakeYoutubeDL.error = None
-    monkeypatch.setattr(youtube.yt_dlp, "YoutubeDL", FakeYoutubeDL)
+    monkeypatch.setattr(download.yt_dlp, "YoutubeDL", FakeYoutubeDL)
 
 
 @pytest.mark.parametrize(
@@ -79,37 +79,37 @@ def test_parse_video_id_rejects(url):
 
 
 def test_download_returns_wav_and_metadata(tmp_path):
-    audio = youtube.download_audio(VIDEO_ID, tmp_path)
+    audio = download.download_audio(VIDEO_ID, tmp_path)
     assert audio.path == tmp_path / "audio.wav"
     assert (audio.title, audio.duration_seconds) == ("Dois Passarinhos", 120)
 
 
 def test_download_uses_canonical_url(tmp_path):
-    youtube.download_audio(VIDEO_ID, tmp_path)
+    download.download_audio(VIDEO_ID, tmp_path)
     assert FakeYoutubeDL.last_url == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
 
 def test_download_rejects_long_video(tmp_path):
-    FakeYoutubeDL.duration = youtube.MAX_DURATION_SECONDS + 1
+    FakeYoutubeDL.duration = download.MAX_DURATION_SECONDS + 1
     with pytest.raises(VideoTooLongError):
-        youtube.download_audio(VIDEO_ID, tmp_path)
+        download.download_audio(VIDEO_ID, tmp_path)
     assert not (tmp_path / "audio.wav").exists()
 
 
 def test_download_rejects_unknown_duration(tmp_path):
     FakeYoutubeDL.duration = None
     with pytest.raises(DownloadError):
-        youtube.download_audio(VIDEO_ID, tmp_path)
+        download.download_audio(VIDEO_ID, tmp_path)
 
 
 def test_download_wraps_ytdlp_errors(tmp_path):
     FakeYoutubeDL.error = yt_dlp.utils.DownloadError("boom")
     with pytest.raises(DownloadError):
-        youtube.download_audio(VIDEO_ID, tmp_path)
+        download.download_audio(VIDEO_ID, tmp_path)
 
 
 def test_download_disables_playlist(tmp_path):
-    youtube.download_audio(VIDEO_ID, tmp_path)
+    download.download_audio(VIDEO_ID, tmp_path)
     assert FakeYoutubeDL.last_opts["noplaylist"] is True
 
 

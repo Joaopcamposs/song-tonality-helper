@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.errors import InvalidUrlError
+from app.domain.features import ALGO_VERSION
 from app.domain.notes import DEFAULT_CEILING_MIDI, ceiling_options
-from app.domain.pitch import ALGO_VERSION
 from app.domain.schemas import (
     AnalysisCreated,
     AnalysisOut,

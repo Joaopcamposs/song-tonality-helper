@@ -1,6 +1,8 @@
-"""Extração da melodia e do chroma de um áudio: nota mais aguda e onde ela toca."""
+"""Extração da melodia e do chroma de um áudio: nota mais aguda e onde ela toca.
 
-from dataclasses import dataclass
+Usa librosa e scipy, então só o worker importa este módulo.
+"""
+
 from pathlib import Path
 
 import librosa
@@ -8,6 +10,7 @@ import numpy as np
 from scipy.signal import medfilt
 
 from app.domain.errors import NoMelodyError
+from app.domain.features import AudioFeatures
 
 BINS_PER_OCTAVE = 36  # 3 divisões por semitom na CQT
 HOP = 512
@@ -17,18 +20,6 @@ RANKING_SIZE = 8
 MAX_TIMES = 5
 MIN_RUN_FRAMES = 10  # trechos menores que isso (~0,23 s) não contam como ocorrência
 RUN_GAP_SECONDS = 1.0  # quadros separados por menos que isso formam o mesmo trecho
-# Sobe quando o critério da análise muda, para refazer os registros guardados.
-ALGO_VERSION = 1
-
-
-@dataclass(frozen=True)
-class AudioFeatures:
-    """Resultado da análise: topo da melodia, ranking, tempos e perfil médio do chroma."""
-
-    top_midi: int
-    ranking: list[tuple[int, int]]
-    top_times: list[float]
-    chroma_profile: list[float]  # média do chroma no tempo: 12 valores, um por nota
 
 
 def _melody(y_harmonic: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

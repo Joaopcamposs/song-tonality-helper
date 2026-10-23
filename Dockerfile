@@ -8,9 +8,9 @@ RUN apt-get update \
 
 WORKDIR /srv
 
-# Dependências primeiro: a camada só é refeita quando pyproject/uv.lock mudam.
+# Dependências primeiro (o extra worker traz yt-dlp e librosa; a API na nuvem dispensa): a camada só é refeita quando pyproject/uv.lock mudam.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project --extra worker
 
 COPY app ./app
 COPY frontend ./frontend

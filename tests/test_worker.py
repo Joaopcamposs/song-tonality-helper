@@ -3,9 +3,9 @@ from pathlib import Path
 
 from app import worker
 from app.domain.errors import DownloadError
-from app.domain.pitch import AudioFeatures
+from app.domain.features import AudioFeatures
 from app.services import jobs, store
-from app.services.youtube import DownloadedAudio
+from app.services.download import DownloadedAudio
 
 VIDEO_ID = "dQw4w9WgXcQ"
 
@@ -18,8 +18,8 @@ def _fake_pipeline(monkeypatch, calls: list[str]) -> None:
     features = AudioFeatures(
         top_midi=71, ranking=[(71, 150)], top_times=[1.0], chroma_profile=[0.1] * 12
     )
-    monkeypatch.setattr(jobs, "download_audio", download)
-    monkeypatch.setattr(jobs, "analyze_audio", lambda path: features)
+    monkeypatch.setattr(worker, "download_audio", download)
+    monkeypatch.setattr(worker, "analyze_audio", lambda path: features)
 
 
 async def _enqueue(video_id: str = VIDEO_ID) -> None:
@@ -56,7 +56,7 @@ async def test_pipeline_failure_becomes_error_job(monkeypatch):
     def failing(video_id: str, dest_dir: Path) -> DownloadedAudio:
         raise DownloadError("Não consegui baixar o áudio deste vídeo.")
 
-    monkeypatch.setattr(jobs, "download_audio", failing)
+    monkeypatch.setattr(worker, "download_audio", failing)
     await _enqueue()
     assert await worker.process_next() is True
     async with store.session() as session:
@@ -79,7 +79,7 @@ async def test_job_stuck_by_db_failure_is_requeued_and_finishes(monkeypatch):
     calls: list[str] = []
     _fake_pipeline(monkeypatch, calls)
     await _enqueue()
-    real_finish, real_fail = jobs._finish, jobs._fail
+    real_finish, real_fail = worker._finish, worker._fail
     failures = {"left": 1}
 
     async def flaky_finish(video_id: str) -> None:
@@ -93,8 +93,8 @@ async def test_job_stuck_by_db_failure_is_requeued_and_finishes(monkeypatch):
             raise OSError("banco caiu")
         await real_fail(video_id, message)
 
-    monkeypatch.setattr(jobs, "_finish", flaky_finish)
-    monkeypatch.setattr(jobs, "_fail", flaky_fail)
+    monkeypatch.setattr(worker, "_finish", flaky_finish)
+    monkeypatch.setattr(worker, "_fail", flaky_fail)
     busy, needs_recovery = await worker.run_once(False)
     assert (busy, needs_recovery) == (False, True)
     busy, needs_recovery = await worker.run_once(needs_recovery)

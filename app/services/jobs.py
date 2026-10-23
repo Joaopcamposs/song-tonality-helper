@@ -1,23 +1,13 @@
-"""Andamento das análises guardado no banco: fila, reivindicação e execução pelo worker."""
+"""Andamento das análises guardado no banco: fila e reivindicação (a execução fica no worker)."""
 
-import asyncio
-import logging
-import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 
 from sqlalchemy import CursorResult, delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.errors import DomainError
-from app.domain.pitch import ALGO_VERSION, analyze_audio
-from app.services import store
 from app.services.store import Job, JobStatus
-from app.services.youtube import download_audio
-
-logger = logging.getLogger(__name__)
 
 MAX_JOBS = 50
 
@@ -30,7 +20,7 @@ class Progress:
     error: str | None = None
 
 
-def _now() -> datetime:
+def now() -> datetime:
     """Momento atual em UTC, sem fuso, como o banco guarda."""
     return datetime.now(UTC).replace(tzinfo=None)
 
@@ -41,11 +31,11 @@ async def start(session: AsyncSession, video_id: str) -> bool:
     reused = await session.execute(
         update(Job)
         .where(Job.video_id == video_id, Job.status == "error")
-        .values(status="pending", error=None, updated_at=_now())
+        .values(status="pending", error=None, updated_at=now())
     )
     assert isinstance(reused, CursorResult)
     if reused.rowcount == 0:
-        session.add(Job(video_id=video_id, status="pending", error=None, updated_at=_now()))
+        session.add(Job(video_id=video_id, status="pending", error=None, updated_at=now()))
     try:
         await session.commit()
     except IntegrityError:  # outro pedido criou o job antes
@@ -74,7 +64,7 @@ async def fail(session: AsyncSession, video_id: str, message: str) -> None:
     await session.execute(
         update(Job)
         .where(Job.video_id == video_id)
-        .values(status="error", error=message, updated_at=_now())
+        .values(status="error", error=message, updated_at=now())
     )
     await session.commit()
     await _prune(session)
@@ -112,7 +102,7 @@ async def claim(session: AsyncSession) -> str | None:
     claimed = await session.scalar(
         update(Job)
         .where(Job.video_id == oldest, Job.status == "pending")
-        .values(status="downloading", updated_at=_now())
+        .values(status="downloading", updated_at=now())
         .returning(Job.video_id)
     )
     await session.commit()
@@ -124,52 +114,8 @@ async def requeue_orphans(session: AsyncSession) -> int:
     result = await session.execute(
         update(Job)
         .where(Job.status.in_(("downloading", "analyzing")))
-        .values(status="pending", updated_at=_now())
+        .values(status="pending", updated_at=now())
     )
     assert isinstance(result, CursorResult)
     await session.commit()
     return result.rowcount
-
-
-async def _set_status(video_id: str, status: JobStatus) -> None:
-    """Atualiza a etapa do job."""
-    async with store.session() as session:
-        await session.execute(
-            update(Job).where(Job.video_id == video_id).values(status=status, updated_at=_now())
-        )
-        await session.commit()
-
-
-async def _finish(video_id: str) -> None:
-    """Apaga o job concluído."""
-    async with store.session() as session:
-        await session.execute(delete(Job).where(Job.video_id == video_id))
-        await session.commit()
-
-
-async def _fail(video_id: str, message: str) -> None:
-    """Abre uma sessão própria para registrar a falha."""
-    async with store.session() as session:
-        await fail(session, video_id, message)
-
-
-async def run(video_id: str) -> None:
-    """Executa um job já reivindicado e grava o resultado; em falha, guarda só o erro."""
-    try:
-        async with store.session() as session:
-            row = await store.find(session, video_id)
-        if row is not None and row.algo_version == ALGO_VERSION:  # outro pedido já terminou
-            await _finish(video_id)
-            return
-        with tempfile.TemporaryDirectory() as tmp:  # o áudio é sempre apagado
-            audio = await asyncio.to_thread(download_audio, video_id, Path(tmp))
-            await _set_status(video_id, "analyzing")
-            features = await asyncio.to_thread(analyze_audio, audio.path)
-        async with store.session() as session:
-            await store.save(session, video_id, audio.title, audio.duration_seconds, features)
-        await _finish(video_id)
-    except DomainError as error:
-        await _fail(video_id, error.message)
-    except Exception:
-        logger.exception("Falha inesperada na análise %s", video_id)
-        await _fail(video_id, "Erro inesperado ao analisar a música.")

@@ -3,7 +3,7 @@ import os
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.domain.pitch import ALGO_VERSION, AudioFeatures
+from app.domain.features import ALGO_VERSION, AudioFeatures
 from app.services import store
 from tests.conftest import DEFAULT_TEST_URL
 

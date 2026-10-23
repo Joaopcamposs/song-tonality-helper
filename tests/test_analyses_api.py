@@ -9,10 +9,10 @@ from sqlalchemy import func, select
 
 from app import worker
 from app.domain.errors import DomainError, DownloadError, NoMelodyError
-from app.domain.pitch import ALGO_VERSION, AudioFeatures
+from app.domain.features import ALGO_VERSION, AudioFeatures
 from app.main import app
 from app.services import jobs, store
-from app.services.youtube import DownloadedAudio
+from app.services.download import DownloadedAudio
 
 VIDEO_ID = "dQw4w9WgXcQ"
 URL = f"https://www.youtube.com/watch?v={VIDEO_ID}"
@@ -36,8 +36,8 @@ def fake_pipeline(monkeypatch):
         path.write_bytes(b"RIFF")
         return DownloadedAudio(path, "Dois Passarinhos", 120)
 
-    monkeypatch.setattr(jobs, "download_audio", fake_download)
-    monkeypatch.setattr(jobs, "analyze_audio", lambda path: _features())
+    monkeypatch.setattr(worker, "download_audio", fake_download)
+    monkeypatch.setattr(worker, "analyze_audio", lambda path: _features())
 
 
 @pytest_asyncio.fixture
@@ -116,8 +116,8 @@ async def test_download_failure_is_error_not_saved_and_retry_works(client, monke
     def failing(video_id: str, dest_dir: Path) -> DownloadedAudio:
         raise DownloadError("Não consegui baixar o áudio deste vídeo.")
 
-    ok = jobs.download_audio
-    monkeypatch.setattr(jobs, "download_audio", failing)
+    ok = worker.download_audio
+    monkeypatch.setattr(worker, "download_audio", failing)
     await _analyze(client)
     body = (await client.get(f"/api/analyses/{VIDEO_ID}")).json()
     assert body["status"] == "error"
@@ -125,7 +125,7 @@ async def test_download_failure_is_error_not_saved_and_retry_works(client, monke
     assert body["report"] is None
     assert (await client.get("/api/analyses")).json() == []
 
-    monkeypatch.setattr(jobs, "download_audio", ok)
+    monkeypatch.setattr(worker, "download_audio", ok)
     assert (await _analyze(client)).status_code == 202
     assert (await client.get(f"/api/analyses/{VIDEO_ID}")).json()["status"] == "done"
 
@@ -134,7 +134,7 @@ async def test_no_melody_error_is_reported(client, monkeypatch):
     def silent(path: Path) -> AudioFeatures:
         raise NoMelodyError("Não encontrei uma melodia detectável neste áudio.")
 
-    monkeypatch.setattr(jobs, "analyze_audio", silent)
+    monkeypatch.setattr(worker, "analyze_audio", silent)
     await _analyze(client)
     body = (await client.get(f"/api/analyses/{VIDEO_ID}")).json()
     assert body["status"] == "error"
@@ -145,7 +145,7 @@ async def test_unexpected_failure_does_not_leak_details(client, monkeypatch):
     def broken(path: Path) -> AudioFeatures:
         raise RuntimeError("segredo interno")
 
-    monkeypatch.setattr(jobs, "analyze_audio", broken)
+    monkeypatch.setattr(worker, "analyze_audio", broken)
     await _analyze(client)
     body = (await client.get(f"/api/analyses/{VIDEO_ID}")).json()
     assert body["status"] == "error"
@@ -281,7 +281,7 @@ async def test_failed_reanalysis_keeps_old_report_readable(client, monkeypatch):
     def failing(video_id: str, dest_dir: Path) -> DownloadedAudio:
         raise DownloadError("Não consegui baixar o áudio deste vídeo.")
 
-    monkeypatch.setattr(jobs, "download_audio", failing)
+    monkeypatch.setattr(worker, "download_audio", failing)
     assert (await _analyze(client)).status_code == 202
     body = (await client.get(f"/api/analyses/{VIDEO_ID}")).json()
     assert body["status"] == "done"
