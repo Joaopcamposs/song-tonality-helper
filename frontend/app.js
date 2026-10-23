@@ -13,8 +13,8 @@ const SLOW_MS = 5 * 60 * 1000;
 const EXTRACT_KEY = "extractNow";
 const SLOW_TEXT = "Está demorando: o worker pode estar desligado.";
 const EXTRACT_LABEL = {
-  true: "Extrair agora (até 60 s; se não der, vai para o worker)",
-  false: "Enviar para o worker",
+  true: "Tenta na hora (até 60 s); se não der, vai para o worker",
+  false: "Vai para a fila do worker",
 };
 const STATUS_TEXT = {
   pending: "Na fila, aguardando o worker...",

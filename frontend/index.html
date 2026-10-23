@@ -21,7 +21,7 @@
   <link rel="icon" href="/brand/logo.svg" type="image/svg+xml">
   <link rel="icon" href="/brand/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body class="locked">
   <section id="gate" class="gate" hidden>
@@ -59,9 +59,12 @@
         <select id="ceiling"></select>
       </label>
       <p class="hint">Numeração padrão: dó central = C4.</p>
-      <label class="check">
-        <input id="extract-now" type="checkbox">
-        <span id="extract-now-text">Enviar para o worker</span>
+      <label class="switch-row">
+        <span class="switch-text">
+          <b>Extrair agora</b>
+          <small id="extract-now-text">Vai para a fila do worker</small>
+        </span>
+        <input id="extract-now" class="switch" type="checkbox" role="switch">
       </label>
       <button id="submit" class="primary big" type="submit">Analisar</button>
     </form>
@@ -80,6 +83,6 @@
     </section>
   </main>
   </div>
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

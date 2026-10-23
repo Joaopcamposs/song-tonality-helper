@@ -80,8 +80,6 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 button.primary:hover { filter: brightness(1.07); }
 button.big { width: 100%; min-height: 54px; font-size: 1.05rem; }
 label { display: block; color: var(--muted); font-size: .85rem; font-weight: 600; }
-label.check { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-label.check > input { margin: 0; width: auto; }
 label > input, label > select { margin-top: 6px; color: var(--text); font-weight: 400; font-size: 1rem; }
 .stack { display: grid; gap: 14px; }
 
@@ -167,3 +165,13 @@ button.small { min-height: 34px; padding: 4px 12px; font-size: .85rem; }
 .gate { min-height: 100dvh; display: grid; place-items: center; padding: 16px; }
 .gate .panel { width: 100%; max-width: 380px; }
 .gate-brand { display: flex; align-items: center; justify-content: center; gap: 10px; }
+
+/* Linha com switch on/off (extrair agora). */
+.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); cursor: pointer; }
+.switch-text { display: grid; gap: 2px; }
+.switch-text small { color: var(--muted); font-size: .8rem; }
+.switch { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 48px; height: 28px; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); cursor: pointer; transition: background .2s, border-color .2s; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--muted); transition: transform .2s, background .2s; }
+.switch:checked { background: var(--accent); border-color: var(--accent); }
+.switch:checked::after { transform: translateX(20px); background: var(--accent-ink); }
+.switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
