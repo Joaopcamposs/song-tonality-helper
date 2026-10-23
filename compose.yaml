@@ -25,25 +25,33 @@ services:
     # Só a máquina local acessa direto; o acesso público passa pelo túnel.
     ports:
       - "127.0.0.1:8007:8000"
-    # Palavra secreta da API (vazia = sem proteção) e banco; ambos sobrescrevíveis no .env.
+    # Palavra secreta da API (vazia = sem proteção); o banco é sempre o Postgres deste compose.
     environment:
       APP_PASSPHRASE: ${APP_PASSPHRASE:-}
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-dev}@db:5432/song_tonality}
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-dev}@db:5432/song_tonality
     depends_on:
       db:
         condition: service_healthy
 
-  # Worker: pega os jobs pendentes do banco, baixa o áudio e analisa. Usa a mesma imagem da API;
-  # numa instalação com API na nuvem, rode só este serviço em casa, com o DATABASE_URL do Neon.
+  # Worker: pega os jobs pendentes do banco, baixa o áudio e analisa. Usa a mesma imagem da API.
   worker:
     build: .
     restart: unless-stopped
     command: python -m app.worker
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-dev}@db:5432/song_tonality}
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-dev}@db:5432/song_tonality
     depends_on:
       db:
         condition: service_healthy
+
+  # Worker contra o banco remoto (API na nuvem): DATABASE_URL e PROXY_* vêm do .env, sem usar o db
+  # daqui. Só sobe com o perfil `remote` (`make worker-remote`), nunca no `docker compose up` comum.
+  worker-remote:
+    build: .
+    restart: unless-stopped
+    command: python -m app.worker
+    profiles: ["remote"]
+    env_file: .env
 
   tunnel:
     image: cloudflare/cloudflared:latest

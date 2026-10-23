@@ -1,5 +1,5 @@
 # Atalhos de desenvolvimento. Uso: make <alvo>.
-.PHONY: db run worker worker-remote test ruff ty up down build-up deploy
+.PHONY: db run worker worker-remote worker-remote-logs worker-remote-down test ruff ty up down build-up deploy
 
 # Postgres local do compose (porta 5432). Sobrescreva no ambiente para usar outro banco.
 export DATABASE_URL ?= postgresql+asyncpg://postgres:dev@localhost:5432/song_tonality
@@ -32,11 +32,19 @@ ruff:
 ty:
 	$(UV_RUN) ty check app tests
 
-# Sobe só o worker contra o banco remoto (Supabase): DATABASE_URL e PROXY_* vêm do .env.
-# `env -u` tira o padrão local exportado acima, que senão teria precedência sobre o .env.
+# Sobe o worker no Docker (em segundo plano) contra o banco remoto: DATABASE_URL e PROXY_* vêm do .env.
+# Reinicia sozinho; veja o log com `make worker-remote-logs` e pare com `make worker-remote-down`.
 worker-remote:
 	@test -f .env || { echo "Crie o .env com DATABASE_URL=<banco remoto>"; exit 1; }
-	env -u DATABASE_URL -u TEST_DATABASE_URL $(UV_RUN) --env-file .env python -m app.worker
+	docker compose --profile remote up -d --build worker-remote
+
+# Acompanha o log do worker remoto (Ctrl+C só sai do log, o worker continua rodando).
+worker-remote-logs:
+	docker compose --profile remote logs -f --tail=50 worker-remote
+
+# Para e remove o contêiner do worker remoto.
+worker-remote-down:
+	docker compose --profile remote rm -sf worker-remote
 
 # Sobe tudo pelo compose (db, API, worker e túnel) sem reconstruir a imagem.
 up:
