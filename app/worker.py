@@ -1,8 +1,7 @@
-"""Worker local (único que usa yt-dlp e librosa): processa os jobs pendentes do banco.
+"""Worker: processa os jobs pendentes do banco (baixa o áudio, analisa e grava o resultado).
 
-Baixa o áudio, analisa e grava o resultado.
-
-Uso: `python -m app.worker`. Rode um único worker por banco.
+Uso: `python -m app.worker`. Rode um único worker por banco. A API também pode tentar um job
+pelo proxy de `DOWNLOAD_PROXY_URL` (`try_with_proxy`, experimento); se falhar, o worker assume.
 """
 
 import asyncio
@@ -15,11 +14,11 @@ from pathlib import Path
 
 from sqlalchemy import delete, update
 
-from app.domain.errors import DomainError
+from app.domain.errors import DomainError, DownloadError
 from app.domain.features import ALGO_VERSION
 from app.domain.pitch import analyze_audio
 from app.services import jobs, store
-from app.services.download import download_audio
+from app.services.download import download_audio, redact
 from app.services.store import Job, JobStatus
 
 logger = logging.getLogger(__name__)
@@ -47,8 +46,25 @@ async def _fail(video_id: str, message: str) -> None:
         await jobs.fail(session, video_id, message)
 
 
-async def run(video_id: str) -> None:
-    """Executa um job já reivindicado e grava o resultado; em falha, guarda só o erro."""
+def proxy_url() -> str | None:
+    """URL do proxy de download (segredo); None quando o experimento está desligado."""
+    return os.environ.get("DOWNLOAD_PROXY_URL") or None
+
+
+async def _requeue(video_id: str) -> None:
+    """Devolve o job à fila, sem erro visível, para o worker local assumir."""
+    async with store.session() as session:
+        await jobs.requeue(session, video_id)
+
+
+async def run(video_id: str, proxy: str | None = None) -> None:
+    """Executa um job já reivindicado e grava o resultado; em falha, guarda só o erro.
+
+    Com `proxy` (tentativa da API), falha de download ou erro inesperado devolvem o job à fila em
+    vez de virar erro: o áudio pode estar bloqueado só para o proxy, e o worker local tenta de
+    novo (se também falhar lá, o erro aparece normalmente). Erros de análise seguem o caminho
+    normal, pois o áudio seria o mesmo em qualquer lugar.
+    """
     try:
         async with store.session() as session:
             row = await store.find(session, video_id)
@@ -56,17 +72,32 @@ async def run(video_id: str) -> None:
             await _finish(video_id)
             return
         with tempfile.TemporaryDirectory() as tmp:  # o áudio é sempre apagado
-            audio = await asyncio.to_thread(download_audio, video_id, Path(tmp))
+            audio = await asyncio.to_thread(download_audio, video_id, Path(tmp), proxy)
             await _set_status(video_id, "analyzing")
             features = await asyncio.to_thread(analyze_audio, audio.path)
         async with store.session() as session:
             await store.save(session, video_id, audio.title, audio.duration_seconds, features)
         await _finish(video_id)
+        logger.info("Análise %s resolvida %s", video_id, "via proxy" if proxy else "via worker")
     except DomainError as error:
-        await _fail(video_id, error.message)
-    except Exception:
-        logger.exception("Falha inesperada na análise %s", video_id)
-        await _fail(video_id, "Erro inesperado ao analisar a música.")
+        if proxy is not None and isinstance(error, DownloadError):
+            logger.warning("Download de %s falhou pelo proxy; fallback para o worker", video_id)
+            await _requeue(video_id)
+        else:
+            await _fail(video_id, error.message)
+    except Exception as error:
+        # Sem traceback quando há proxy: a mensagem da exceção pode conter a URL (segredo).
+        if proxy is None:
+            logger.exception("Falha inesperada na análise %s", video_id)
+            await _fail(video_id, "Erro inesperado ao analisar a música.")
+        else:
+            logger.error(
+                "Falha inesperada pelo proxy em %s (%s: %s); fallback para o worker acionado",
+                video_id,
+                type(error).__name__,
+                redact(str(error), proxy),
+            )
+            await _requeue(video_id)
 
 
 async def process_next() -> bool:
@@ -78,6 +109,19 @@ async def process_next() -> bool:
     logger.info("Analisando %s", video_id)
     await run(video_id)
     return True
+
+
+async def try_with_proxy(video_id: str) -> None:
+    """Tenta o job pela API usando o proxy; não faz nada se desligado ou se o worker já o pegou."""
+    proxy = proxy_url()
+    if proxy is None:
+        return
+    async with store.session() as session:
+        claimed = await jobs.claim(session, video_id)
+    if claimed is None:
+        return
+    logger.info("Tentando %s pelo proxy", video_id)
+    await run(video_id, proxy)
 
 
 async def recover_orphans() -> None:

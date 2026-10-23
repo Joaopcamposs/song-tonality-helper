@@ -30,7 +30,7 @@ def _features() -> AudioFeatures:
 def fake_pipeline(monkeypatch):
     downloads.clear()
 
-    def fake_download(video_id: str, dest_dir: Path) -> DownloadedAudio:
+    def fake_download(video_id: str, dest_dir: Path, proxy: str | None = None) -> DownloadedAudio:
         downloads.append(dest_dir)
         path = dest_dir / "audio.wav"
         path.write_bytes(b"RIFF")
@@ -113,7 +113,7 @@ async def test_unknown_or_malformed_video_id_is_404(client, video_id):
 
 
 async def test_download_failure_is_error_not_saved_and_retry_works(client, monkeypatch):
-    def failing(video_id: str, dest_dir: Path) -> DownloadedAudio:
+    def failing(video_id: str, dest_dir: Path, proxy: str | None = None) -> DownloadedAudio:
         raise DownloadError("Não consegui baixar o áudio deste vídeo.")
 
     ok = worker.download_audio
@@ -278,7 +278,7 @@ async def test_failed_reanalysis_keeps_old_report_readable(client, monkeypatch):
         row.algo_version = 0
         await session.commit()
 
-    def failing(video_id: str, dest_dir: Path) -> DownloadedAudio:
+    def failing(video_id: str, dest_dir: Path, proxy: str | None = None) -> DownloadedAudio:
         raise DownloadError("Não consegui baixar o áudio deste vídeo.")
 
     monkeypatch.setattr(worker, "download_audio", failing)

@@ -124,3 +124,29 @@ def test_download_disables_playlist(tmp_path):
 def test_parse_video_id_explains_channel_and_playlist_links(url, word):
     with pytest.raises(InvalidUrlError, match=word):
         youtube.parse_video_id(url)
+
+
+def test_download_passes_proxy_only_when_given(tmp_path):
+    download.download_audio(VIDEO_ID, tmp_path)
+    assert "proxy" not in FakeYoutubeDL.last_opts
+    download.download_audio(VIDEO_ID, tmp_path, proxy="http://u:p@proxy.exemplo:8080")
+    assert FakeYoutubeDL.last_opts["proxy"] == "http://u:p@proxy.exemplo:8080"
+
+
+def test_download_error_log_hides_proxy(tmp_path, caplog):
+    proxy = "http://usuario:segredo123@proxy.exemplo:8080"
+    FakeYoutubeDL.error = yt_dlp.utils.DownloadError(f"falha via {proxy}")
+    with pytest.raises(DownloadError) as raised:
+        download.download_audio(VIDEO_ID, tmp_path, proxy=proxy)
+    assert "segredo123" not in caplog.text
+    assert "segredo123" not in raised.value.message
+
+
+def test_download_uses_system_ffmpeg_or_bundled(tmp_path, monkeypatch):
+    monkeypatch.setattr(download.shutil, "which", lambda name: "/usr/bin/ffmpeg")
+    download.download_audio(VIDEO_ID, tmp_path)
+    assert "ffmpeg_location" not in FakeYoutubeDL.last_opts
+    monkeypatch.setattr(download.shutil, "which", lambda name: None)
+    monkeypatch.setattr(download.imageio_ffmpeg, "get_ffmpeg_exe", lambda: "/pacote/ffmpeg")
+    download.download_audio(VIDEO_ID, tmp_path)
+    assert FakeYoutubeDL.last_opts["ffmpeg_location"] == "/pacote/ffmpeg"

@@ -88,25 +88,34 @@ async def get(session: AsyncSession, video_id: str) -> Progress | None:
     return None if job is None else Progress(job.status, job.error)
 
 
-async def claim(session: AsyncSession) -> str | None:
-    """Reivindica o job `pending` mais antigo, passando-o a `downloading`; None se não há fila."""
-    oldest = (
-        select(Job.video_id)
-        .where(Job.status == "pending")
-        .order_by(Job.updated_at)
-        .limit(1)
-        .with_for_update(skip_locked=True)
-        .scalar_subquery()
-    )
-    # A condição repetida no UPDATE garante que só um worker ganha cada job.
+async def claim(session: AsyncSession, video_id: str | None = None) -> str | None:
+    """Reivindica um job `pending`, passando-o a `downloading`; None se não há o que pegar.
+
+    Sem `video_id`, pega o mais antigo da fila; com ele, só aquele job (None se já foi pego).
+    """
+    target = select(Job.video_id).where(Job.status == "pending")
+    if video_id is not None:
+        target = target.where(Job.video_id == video_id)
+    oldest = target.order_by(Job.updated_at).limit(1).with_for_update(skip_locked=True)
+    # A condição repetida no UPDATE garante que só um ganha cada job.
     claimed = await session.scalar(
         update(Job)
-        .where(Job.video_id == oldest, Job.status == "pending")
+        .where(Job.video_id == oldest.scalar_subquery(), Job.status == "pending")
         .values(status="downloading", updated_at=now())
         .returning(Job.video_id)
     )
     await session.commit()
     return claimed
+
+
+async def requeue(session: AsyncSession, video_id: str) -> None:
+    """Devolve o job em curso para `pending`, sem marcar erro, para outro executor assumir."""
+    await session.execute(
+        update(Job)
+        .where(Job.video_id == video_id, Job.status.in_(("downloading", "analyzing")))
+        .values(status="pending", updated_at=now())
+    )
+    await session.commit()
 
 
 async def requeue_orphans(session: AsyncSession) -> int:

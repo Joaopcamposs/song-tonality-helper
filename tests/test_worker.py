@@ -11,7 +11,7 @@ VIDEO_ID = "dQw4w9WgXcQ"
 
 
 def _fake_pipeline(monkeypatch, calls: list[str]) -> None:
-    def download(video_id: str, dest_dir: Path) -> DownloadedAudio:
+    def download(video_id: str, dest_dir: Path, proxy: str | None = None) -> DownloadedAudio:
         calls.append(video_id)
         return DownloadedAudio(dest_dir / "audio.wav", "Música", 100)
 
@@ -53,7 +53,7 @@ async def test_two_workers_run_a_job_only_once(monkeypatch):
 
 
 async def test_pipeline_failure_becomes_error_job(monkeypatch):
-    def failing(video_id: str, dest_dir: Path) -> DownloadedAudio:
+    def failing(video_id: str, dest_dir: Path, proxy: str | None = None) -> DownloadedAudio:
         raise DownloadError("Não consegui baixar o áudio deste vídeo.")
 
     monkeypatch.setattr(worker, "download_audio", failing)

@@ -3,9 +3,19 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import worker
 from app.domain.errors import InvalidUrlError
 from app.domain.features import ALGO_VERSION
 from app.domain.notes import DEFAULT_CEILING_MIDI, ceiling_options
@@ -48,12 +58,17 @@ def list_ceilings() -> CeilingsOut:
     summary="Pede a análise de uma música",
     description=(
         "Recebe o link do YouTube. Se o vídeo já foi analisado, responde 200 com "
-        "`already_analyzed` e a data; senão responde 202 e enfileira para o worker. "
+        "`already_analyzed` e a data; senão responde 202 e enfileira para o worker "
+        "(com `DOWNLOAD_PROXY_URL`, a API tenta antes, pelo proxy). "
         "Responde 429 se o IP passou do limite de novos pedidos por hora."
     ),
 )
 async def create_analysis(
-    body: AnalysisRequest, request: Request, response: Response, session: Session
+    body: AnalysisRequest,
+    request: Request,
+    response: Response,
+    session: Session,
+    background: BackgroundTasks,
 ) -> AnalysisCreated:
     """Identifica o vídeo, reaproveita a análise guardada ou enfileira uma nova."""
     try:
@@ -75,6 +90,8 @@ async def create_analysis(
             )
         if await jobs.start(session, video_id):
             ratelimit.record(client)
+            if worker.proxy_url() is not None:  # experimento: a API tenta antes do worker
+                background.add_task(worker.try_with_proxy, video_id)
     response.status_code = status.HTTP_202_ACCEPTED
     return AnalysisCreated(video_id=video_id, already_analyzed=False)
 
