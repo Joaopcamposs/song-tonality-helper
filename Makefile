@@ -46,7 +46,7 @@ worker-remote-logs:
 worker-remote-down:
 	docker compose --profile remote rm -sf worker-remote
 
-# Sobe tudo pelo compose (db, API, worker e túnel) sem reconstruir a imagem.
+# Sobe tudo pelo compose (db, API e worker) sem reconstruir a imagem.
 up:
 	docker compose up -d
 
