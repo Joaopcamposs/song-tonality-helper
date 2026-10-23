@@ -5,6 +5,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport
+from sqlalchemy import func, select
 
 from app.domain.errors import DownloadError, NoMelodyError
 from app.domain.pitch import ALGO_VERSION, AudioFeatures
@@ -26,7 +27,6 @@ def _features() -> AudioFeatures:
 
 @pytest.fixture(autouse=True)
 def fake_pipeline(monkeypatch):
-    jobs._progress.clear()
     downloads.clear()
 
     def fake_download(video_id: str, dest_dir: Path) -> DownloadedAudio:
@@ -88,7 +88,8 @@ async def test_get_other_ceiling_rebuilds_report_without_download(client):
 )
 async def test_invalid_urls_are_422_and_nothing_started(client, url):
     assert (await _analyze(client, url)).status_code == 422
-    assert not jobs._progress
+    async with store.session() as session:
+        assert await session.scalar(select(func.count()).select_from(store.Job)) == 0
 
 
 @pytest.mark.parametrize("ceiling", [47, 73])
@@ -167,10 +168,12 @@ async def test_simultaneous_posts_download_once(client):
 async def test_run_skips_download_when_analysis_was_saved_meanwhile(client):
     await _analyze(client)
     downloads.clear()
-    assert jobs.start(VIDEO_ID) is True
+    async with store.session() as session:
+        assert await jobs.start(session, VIDEO_ID) is True
     await jobs.run(VIDEO_ID)
     assert downloads == []
-    assert jobs.get(VIDEO_ID) is None
+    async with store.session() as session:
+        assert await jobs.get(session, VIDEO_ID) is None
 
 
 async def test_list_is_newest_first_with_summary(client):
@@ -185,21 +188,43 @@ async def test_list_is_newest_first_with_summary(client):
     assert first["created_at"]
 
 
-async def test_old_error_entries_are_discarded(monkeypatch):
+async def test_old_error_jobs_are_discarded(monkeypatch):
     monkeypatch.setattr(jobs, "MAX_JOBS", 2)
-    jobs.start("aaaaaaaaaaa")
-    jobs._progress["aaaaaaaaaaa"] = jobs.Progress("error", "falhou")
-    jobs.start("bbbbbbbbbbb")
-    jobs.start("ccccccccccc")
-    assert jobs.get("aaaaaaaaaaa") is None
-    assert jobs.get("ccccccccccc") is not None
+    async with store.session() as session:
+        for video_id in ("aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"):
+            await jobs.start(session, video_id)
+            await jobs.fail(session, video_id, "falhou")
+        assert await jobs.get(session, "aaaaaaaaaaa") is None
+        assert await jobs.get(session, "ccccccccccc") is not None
 
 
-async def test_running_entries_are_never_discarded(monkeypatch):
+async def test_running_jobs_are_never_discarded(monkeypatch):
     monkeypatch.setattr(jobs, "MAX_JOBS", 2)
-    for video_id in ("aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"):
-        jobs.start(video_id)
-    assert jobs.get("aaaaaaaaaaa") is not None
+    async with store.session() as session:
+        for video_id in ("aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"):
+            await jobs.start(session, video_id)
+        assert await jobs.get(session, "aaaaaaaaaaa") is not None
+
+
+async def test_start_refuses_running_job_and_reuses_failed_one():
+    async with store.session() as session:
+        assert await jobs.start(session, VIDEO_ID) is True
+        assert await jobs.start(session, VIDEO_ID) is False
+        await jobs.fail(session, VIDEO_ID, "falhou")
+        assert await jobs.start(session, VIDEO_ID) is True
+        progress = await jobs.get(session, VIDEO_ID)
+    assert progress == jobs.Progress("downloading")
+
+
+async def test_fail_interrupted_marks_running_jobs_and_keeps_analyses(client):
+    await _analyze(client)
+    async with store.session() as session:
+        await jobs.start(session, "aaaaaaaaaaa")
+    await jobs.fail_interrupted()
+    async with store.session() as session:
+        progress = await jobs.get(session, "aaaaaaaaaaa")
+        assert await store.find(session, VIDEO_ID) is not None
+    assert progress == jobs.Progress("error", "Análise interrompida, tente de novo.")
 
 
 async def test_ceilings_endpoint_lists_options(client):
@@ -249,7 +274,8 @@ async def test_delete_unknown_is_404(client):
 
 async def test_delete_during_reanalysis_is_409_and_keeps_record(client):
     await _analyze(client)
-    jobs._progress[VIDEO_ID] = jobs.Progress("analyzing")
+    async with store.session() as session:
+        await jobs.start(session, VIDEO_ID)
     assert (await client.delete(f"/api/analyses/{VIDEO_ID}")).status_code == 409
     assert (await client.get("/api/analyses")).json()[0]["video_id"] == VIDEO_ID
 

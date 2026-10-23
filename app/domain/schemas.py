@@ -61,7 +61,7 @@ class AnalysisOut(BaseModel):
     """Estado de uma análise; o relatório vem quando o status é `done`."""
 
     video_id: str
-    status: Literal["downloading", "analyzing", "done", "error"]
+    status: Literal["pending", "downloading", "analyzing", "done", "error"]
     error: str | None = None
     title: str | None = None
     report: Report | None = None

@@ -3,8 +3,9 @@
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
-from sqlalchemy import JSON, make_url, select
+from sqlalchemy import JSON, String, make_url, select
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -34,6 +35,20 @@ class Analysis(Base):
     chroma_profile: Mapped[list[float]] = mapped_column(JSON)
     algo_version: Mapped[int]
     created_at: Mapped[datetime]  # UTC; o SQLite devolve sem fuso
+
+
+JobStatus = Literal["pending", "downloading", "analyzing", "error"]
+
+
+class Job(Base):
+    """Andamento de uma análise em curso ou que falhou, chaveado pelo id do vídeo."""
+
+    __tablename__ = "jobs"
+
+    video_id: Mapped[str] = mapped_column(primary_key=True)
+    status: Mapped[JobStatus] = mapped_column(String)
+    error: Mapped[str | None]
+    updated_at: Mapped[datetime]  # UTC ingênuo, como em Analysis
 
 
 _engine: AsyncEngine | None = None

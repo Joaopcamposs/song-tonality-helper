@@ -63,7 +63,7 @@ async def create_analysis(
         return AnalysisCreated(
             video_id=video_id, already_analyzed=True, analyzed_at=_utc(row.created_at)
         )
-    if jobs.start(video_id):
+    if await jobs.start(session, video_id):
         background.add_task(jobs.run, video_id)
     response.status_code = status.HTTP_202_ACCEPTED
     return AnalysisCreated(video_id=video_id, already_analyzed=False)
@@ -102,7 +102,7 @@ async def get_analysis(
     ceiling_midi: Annotated[int, Query(ge=48, le=72)] = DEFAULT_CEILING_MIDI,
 ) -> AnalysisOut:
     """Estado da análise; 404 se o vídeo nunca foi analisado."""
-    progress = jobs.get(video_id)
+    progress = await jobs.get(session, video_id)
     row = await store.find(session, video_id)
     # Erro de uma reanálise não esconde o registro guardado, que continua legível.
     if progress is not None and not (progress.status == "error" and row is not None):
@@ -123,8 +123,8 @@ async def get_analysis(
     ),
 )
 async def delete_analysis(video_id: str, session: Session) -> None:
-    """Apaga a análise guardada e o andamento em memória do vídeo."""
-    if not jobs.forget(video_id):
+    """Apaga a análise guardada e a falha registrada do vídeo."""
+    if not await jobs.forget(session, video_id):
         raise HTTPException(status.HTTP_409_CONFLICT, "A música está sendo analisada agora.")
     if not await store.remove(session, video_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Análise não encontrada.")
