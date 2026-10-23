@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     # Só a máquina local acessa direto; o acesso público passa pelo túnel.
     ports:
-      - "127.0.0.1:8001:8000"
+      - "127.0.0.1:8007:8000"
     # O banco SQLite fica no volume, para as análises sobreviverem a recriações.
     volumes:
       - song-tonality-data:/srv/data

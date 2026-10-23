@@ -8,7 +8,7 @@ Requisitos: [uv](https://docs.astral.sh/uv/) e `ffmpeg` (`brew install ffmpeg`).
 
 ```bash
 uv sync
-make run          # http://localhost:8001
+make run          # http://localhost:8007
 ```
 
 1. Cole o link do YouTube (um vídeo de até 10 minutos).
