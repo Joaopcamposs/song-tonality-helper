@@ -1,4 +1,4 @@
-"""Andamento das análises guardado no banco e execução em segundo plano."""
+"""Andamento das análises guardado no banco: fila, reivindicação e execução pelo worker."""
 
 import asyncio
 import logging
@@ -20,7 +20,6 @@ from app.services.youtube import download_audio
 logger = logging.getLogger(__name__)
 
 MAX_JOBS = 50
-INTERRUPTED_MESSAGE = "Análise interrompida, tente de novo."
 
 
 @dataclass
@@ -37,16 +36,16 @@ def _now() -> datetime:
 
 
 async def start(session: AsyncSession, video_id: str) -> bool:
-    """Marca o vídeo como em andamento; devolve False se já havia job em curso."""
+    """Enfileira o vídeo como `pending`; devolve False se já havia job em curso."""
     # O UPDATE condicional reaproveita só a linha de falha, mesmo com pedidos simultâneos.
     reused = await session.execute(
         update(Job)
         .where(Job.video_id == video_id, Job.status == "error")
-        .values(status="downloading", error=None, updated_at=_now())
+        .values(status="pending", error=None, updated_at=_now())
     )
     assert isinstance(reused, CursorResult)
     if reused.rowcount == 0:
-        session.add(Job(video_id=video_id, status="downloading", error=None, updated_at=_now()))
+        session.add(Job(video_id=video_id, status="pending", error=None, updated_at=_now()))
     try:
         await session.commit()
     except IntegrityError:  # outro pedido criou o job antes
@@ -99,15 +98,37 @@ async def get(session: AsyncSession, video_id: str) -> Progress | None:
     return None if job is None else Progress(job.status, job.error)
 
 
-async def fail_interrupted() -> None:
-    """Marca como falho todo job em curso; roda na subida, quando nenhum processo o executa."""
-    async with store.session() as session:
-        await session.execute(
-            update(Job)
-            .where(Job.status != "error")
-            .values(status="error", error=INTERRUPTED_MESSAGE, updated_at=_now())
-        )
-        await session.commit()
+async def claim(session: AsyncSession) -> str | None:
+    """Reivindica o job `pending` mais antigo, passando-o a `downloading`; None se não há fila."""
+    oldest = (
+        select(Job.video_id)
+        .where(Job.status == "pending")
+        .order_by(Job.updated_at)
+        .limit(1)
+        .with_for_update(skip_locked=True)  # ignorado pelo SQLite
+        .scalar_subquery()
+    )
+    # A condição repetida no UPDATE garante que só um worker ganha cada job.
+    claimed = await session.scalar(
+        update(Job)
+        .where(Job.video_id == oldest, Job.status == "pending")
+        .values(status="downloading", updated_at=_now())
+        .returning(Job.video_id)
+    )
+    await session.commit()
+    return claimed
+
+
+async def requeue_orphans(session: AsyncSession) -> int:
+    """Recoloca na fila os jobs em curso de um worker que caiu; devolve quantos eram."""
+    result = await session.execute(
+        update(Job)
+        .where(Job.status.in_(("downloading", "analyzing")))
+        .values(status="pending", updated_at=_now())
+    )
+    assert isinstance(result, CursorResult)
+    await session.commit()
+    return result.rowcount
 
 
 async def _set_status(video_id: str, status: JobStatus) -> None:
@@ -133,7 +154,7 @@ async def _fail(video_id: str, message: str) -> None:
 
 
 async def run(video_id: str) -> None:
-    """Executa a análise e grava o resultado; em falha, guarda só a mensagem de erro."""
+    """Executa um job já reivindicado e grava o resultado; em falha, guarda só o erro."""
     try:
         async with store.session() as session:
             row = await store.find(session, video_id)

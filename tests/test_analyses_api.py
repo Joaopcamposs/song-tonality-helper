@@ -7,6 +7,7 @@ import pytest_asyncio
 from httpx import ASGITransport
 from sqlalchemy import func, select
 
+from app import worker
 from app.domain.errors import DownloadError, NoMelodyError
 from app.domain.pitch import ALGO_VERSION, AudioFeatures
 from app.main import app
@@ -45,8 +46,16 @@ async def client():
         yield c
 
 
-async def _analyze(client: httpx.AsyncClient, url: str = URL) -> httpx.Response:
+async def _post(client: httpx.AsyncClient, url: str = URL) -> httpx.Response:
     return await client.post("/api/analyses", json={"url": url})
+
+
+async def _analyze(client: httpx.AsyncClient, url: str = URL) -> httpx.Response:
+    """Pede a análise e deixa o worker processar a fila, como no uso real."""
+    response = await _post(client, url)
+    while await worker.process_next():
+        pass
+    return response
 
 
 async def test_new_video_is_202_then_done_with_report(client):
@@ -160,7 +169,9 @@ async def test_stale_algo_version_is_reanalyzed(client):
 
 
 async def test_simultaneous_posts_download_once(client):
-    responses = await asyncio.gather(_analyze(client), _analyze(client))
+    responses = await asyncio.gather(_post(client), _post(client))
+    while await worker.process_next():
+        pass
     assert sorted(r.status_code for r in responses) in ([200, 202], [202, 202])
     assert len(downloads) == 1
 
@@ -170,7 +181,7 @@ async def test_run_skips_download_when_analysis_was_saved_meanwhile(client):
     downloads.clear()
     async with store.session() as session:
         assert await jobs.start(session, VIDEO_ID) is True
-    await jobs.run(VIDEO_ID)
+    assert await worker.process_next() is True
     assert downloads == []
     async with store.session() as session:
         assert await jobs.get(session, VIDEO_ID) is None
@@ -213,18 +224,36 @@ async def test_start_refuses_running_job_and_reuses_failed_one():
         await jobs.fail(session, VIDEO_ID, "falhou")
         assert await jobs.start(session, VIDEO_ID) is True
         progress = await jobs.get(session, VIDEO_ID)
-    assert progress == jobs.Progress("downloading")
+    assert progress == jobs.Progress("pending")
 
 
-async def test_fail_interrupted_marks_running_jobs_and_keeps_analyses(client):
-    await _analyze(client)
+async def test_post_leaves_job_pending_until_worker_runs(client):
+    assert (await _post(client)).status_code == 202
+    assert (await client.get(f"/api/analyses/{VIDEO_ID}")).json()["status"] == "pending"
+    assert downloads == []
+    assert await worker.process_next() is True
+    assert (await client.get(f"/api/analyses/{VIDEO_ID}")).json()["status"] == "done"
+
+
+async def test_claim_gives_each_pending_job_once_oldest_first():
     async with store.session() as session:
         await jobs.start(session, "aaaaaaaaaaa")
-    await jobs.fail_interrupted()
+        await jobs.start(session, "bbbbbbbbbbb")
+        assert await jobs.claim(session) == "aaaaaaaaaaa"
+        assert await jobs.get(session, "aaaaaaaaaaa") == jobs.Progress("downloading")
+        assert await jobs.claim(session) == "bbbbbbbbbbb"
+        assert await jobs.claim(session) is None
+
+
+async def test_requeue_orphans_returns_running_jobs_to_pending_and_keeps_errors():
     async with store.session() as session:
-        progress = await jobs.get(session, "aaaaaaaaaaa")
-        assert await store.find(session, VIDEO_ID) is not None
-    assert progress == jobs.Progress("error", "Análise interrompida, tente de novo.")
+        await jobs.start(session, "aaaaaaaaaaa")
+        await jobs.claim(session)
+        await jobs.start(session, "bbbbbbbbbbb")
+        await jobs.fail(session, "bbbbbbbbbbb", "falhou")
+        assert await jobs.requeue_orphans(session) == 1
+        assert await jobs.get(session, "aaaaaaaaaaa") == jobs.Progress("pending")
+        assert await jobs.get(session, "bbbbbbbbbbb") == jobs.Progress("error", "falhou")
 
 
 async def test_ceilings_endpoint_lists_options(client):
@@ -285,3 +314,20 @@ async def test_delete_then_analyze_again_downloads_again(client):
     await client.delete(f"/api/analyses/{VIDEO_ID}")
     assert (await _analyze(client)).status_code == 202
     assert len(downloads) == 2
+
+
+async def test_rate_limit_blocks_new_jobs_per_ip_but_not_reuse(client, monkeypatch):
+    monkeypatch.setenv("MAX_REQUESTS_PER_HOUR", "2")
+    assert (await _post(client, "https://youtu.be/aaaaaaaaaaa")).status_code == 202
+    # Job já existente não conta nem é bloqueado.
+    assert (await _post(client, "https://youtu.be/aaaaaaaaaaa")).status_code == 202
+    assert (await _post(client, "https://youtu.be/bbbbbbbbbbb")).status_code == 202
+    blocked = await _post(client, "https://youtu.be/ccccccccccc")
+    assert blocked.status_code == 429
+    assert "limite" in blocked.json()["detail"].lower()
+    async with store.session() as session:
+        assert await jobs.get(session, "ccccccccccc") is None
+    # Análise guardada também não conta.
+    while await worker.process_next():
+        pass
+    assert (await _post(client, "https://youtu.be/aaaaaaaaaaa")).status_code == 200

@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.routers import analyses
-from app.services import jobs, store
+from app.services import store
 
 
 @asynccontextmanager
@@ -17,7 +17,6 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     """Abre o banco na subida (`DATABASE_URL`) e fecha as conexões ao desligar."""
     store.configure(os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///data/analyses.db"))
     await store.create_tables()
-    await jobs.fail_interrupted()
     yield
     await store.dispose()
 

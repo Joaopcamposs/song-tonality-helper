@@ -8,7 +8,7 @@ import pytest_asyncio
 import soundfile as sf
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.services import store
+from app.services import ratelimit, store
 
 SAMPLE_RATE = 22050
 
@@ -54,3 +54,9 @@ async def db(tmp_path: Path):
     await store.create_tables()
     yield
     await store.dispose()
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limit():
+    """Zera os contadores do limite de pedidos entre os testes."""
+    ratelimit.reset()

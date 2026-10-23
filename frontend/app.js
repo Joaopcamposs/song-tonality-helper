@@ -6,6 +6,7 @@ const POLL_MS = 2000;
 const CONFIRM_MS = 4000;
 const FETCH_ATTEMPTS = 3;
 const STATUS_TEXT = {
+  pending: "Na fila, aguardando o worker...",
   downloading: "Baixando o áudio do vídeo...",
   analyzing: "Analisando a melodia e o tom...",
 };
