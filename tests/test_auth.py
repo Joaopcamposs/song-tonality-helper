@@ -3,6 +3,7 @@ import pytest_asyncio
 from httpx import ASGITransport
 
 from app.main import app
+from app.services import jobs, store
 
 HEADER = "X-App-Passphrase"
 
@@ -57,3 +58,22 @@ async def test_failures_are_counted_per_cloudflare_ip(client, monkeypatch):
     blocked = await client.get("/api/ceilings", headers=first)
     other = await client.get("/api/ceilings", headers={**first, "CF-Connecting-IP": "2.2.2.2"})
     assert (blocked.status_code, other.status_code) == (429, 401)
+
+
+async def test_without_passphrase_nothing_is_registered(client, monkeypatch):
+    monkeypatch.setenv("APP_PASSPHRASE", "segredo")
+    url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    for body in ({"url": url}, {"url": "lixo"}, {}):
+        assert (await client.post("/api/analyses", json=body)).status_code == 401
+    assert (await client.delete("/api/analyses/dQw4w9WgXcQ")).status_code == 401
+    monkeypatch.setenv("APP_PASSPHRASE", "")
+    assert (await client.get("/api/analyses")).json() == []
+    async with store.session() as session:
+        assert await jobs.get(session, "dQw4w9WgXcQ") is None
+
+
+async def test_opening_the_page_without_passphrase_is_not_a_failure(client, monkeypatch):
+    monkeypatch.setenv("APP_PASSPHRASE", "segredo")
+    for _ in range(15):
+        assert (await client.get("/api/ceilings")).status_code == 401
+    assert (await client.get("/api/ceilings", headers={HEADER: "segredo"})).status_code == 200

@@ -22,7 +22,9 @@ def require_passphrase(request: Request) -> None:
             status.HTTP_429_TOO_MANY_REQUESTS, "Tentativas demais, tente de novo mais tarde."
         )
     # Cabeçalhos HTTP são latin-1: valores fora disso viram "?" em vez de levantar exceção.
-    given = request.headers.get(HEADER, "").encode("latin-1", errors="replace")
+    sent = request.headers.get(HEADER)
+    given = (sent or "").encode("latin-1", errors="replace")
     if not secrets.compare_digest(given, expected.encode("latin-1", errors="replace")):
-        ratelimit.record(client)
+        if sent is not None:  # sem cabeçalho é só a página abrindo; palpite errado é que conta
+            ratelimit.record(client)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Palavra secreta ausente ou incorreta.")
