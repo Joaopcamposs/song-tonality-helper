@@ -26,6 +26,7 @@ from app.domain.schemas import (
     AnalysisSummary,
     CeilingOut,
     CeilingsOut,
+    JobOut,
 )
 from app.services import jobs, ratelimit, store
 from app.services.auth import require_passphrase
@@ -156,3 +157,39 @@ async def delete_analysis(video_id: str, session: Session) -> None:
         raise HTTPException(status.HTTP_409_CONFLICT, "A música está sendo analisada agora.")
     if not await store.remove(session, video_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Análise não encontrada.")
+
+
+@router.get(
+    "/jobs",
+    summary="Lista os pedidos em andamento ou com erro",
+    description=(
+        "Pedidos que ainda não viraram análise guardada: na fila, baixando, analisando ou "
+        "com erro (com a mensagem). Do mais recente para o mais antigo."
+    ),
+)
+async def list_jobs(session: Session) -> list[JobOut]:
+    """Fila e falhas, para a tela mostrar o que o worker está fazendo ou não conseguiu."""
+    return [
+        JobOut(
+            video_id=job.video_id,
+            status=job.status,
+            error=job.error,
+            updated_at=_utc(job.updated_at),
+        )
+        for job in await jobs.list_all(session)
+    ]
+
+
+@router.delete(
+    "/jobs/{video_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Dispensa um pedido com erro",
+    description=(
+        "Remove só a falha registrada, sem tocar na análise guardada. Responde 409 se o "
+        "pedido está na fila ou em andamento."
+    ),
+)
+async def dismiss_job(video_id: str, session: Session) -> None:
+    """Esquece a falha do vídeo para ela sair da lista de pedidos."""
+    if not await jobs.forget(session, video_id):
+        raise HTTPException(status.HTTP_409_CONFLICT, "O pedido está na fila ou em andamento.")

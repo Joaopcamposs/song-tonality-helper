@@ -85,6 +85,15 @@ class AnalysisSummary(BaseModel):
     created_at: datetime
 
 
+class JobOut(BaseModel):
+    """Pedido ainda sem análise guardada: na fila, em curso ou com erro."""
+
+    video_id: str
+    status: Literal["pending", "downloading", "analyzing", "error"]
+    error: str | None = None
+    updated_at: datetime
+
+
 class CeilingOut(BaseModel):
     """Uma opção da lista de teto."""
 

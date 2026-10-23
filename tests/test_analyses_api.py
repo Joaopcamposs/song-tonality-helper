@@ -330,3 +330,33 @@ async def test_rate_limit_blocks_new_jobs_per_ip_but_not_reuse(client, monkeypat
     while await worker.process_next():
         pass
     assert (await _post(client, "https://youtu.be/aaaaaaaaaaa")).status_code == 200
+
+
+async def test_jobs_list_shows_queue_and_failures(client, monkeypatch):
+    def no_melody(path: Path):
+        raise NoMelodyError("Sem melodia.")
+
+    await _post(client, "https://youtu.be/aaaaaaaaaaa")
+    queued = (await client.get("/api/jobs")).json()
+    assert [(j["video_id"], j["status"]) for j in queued] == [("aaaaaaaaaaa", "pending")]
+    monkeypatch.setattr(worker, "analyze_audio", no_melody)
+    while await worker.process_next():
+        pass
+    failed = (await client.get("/api/jobs")).json()
+    assert [(j["video_id"], j["status"]) for j in failed] == [("aaaaaaaaaaa", "error")]
+    assert failed[0]["error"] == "Sem melodia."
+
+
+async def test_dismiss_removes_failure_but_not_the_saved_analysis(client):
+    await _analyze(client)
+    async with store.session() as session:
+        await jobs.start(session, VIDEO_ID)
+        await jobs.fail(session, VIDEO_ID, "falhou")
+    assert (await client.delete(f"/api/jobs/{VIDEO_ID}")).status_code == 204
+    assert (await client.get("/api/jobs")).json() == []
+    assert [i["video_id"] for i in (await client.get("/api/analyses")).json()] == [VIDEO_ID]
+
+
+async def test_dismiss_queued_job_is_409(client):
+    await _post(client)
+    assert (await client.delete(f"/api/jobs/{VIDEO_ID}")).status_code == 409

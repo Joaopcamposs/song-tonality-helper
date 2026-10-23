@@ -83,6 +83,12 @@ async def forget(session: AsyncSession, video_id: str) -> bool:
     return True
 
 
+async def list_all(session: AsyncSession) -> list[Job]:
+    """Jobs na fila, em curso ou com erro, dos mais recentes para os mais antigos."""
+    result = await session.scalars(select(Job).order_by(Job.updated_at.desc()))
+    return list(result)
+
+
 async def get(session: AsyncSession, video_id: str) -> Progress | None:
     """Andamento do vídeo, se estiver em análise ou tiver falhado."""
     job = await session.get(Job, video_id)

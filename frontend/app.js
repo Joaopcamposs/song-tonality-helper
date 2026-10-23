@@ -34,6 +34,8 @@ const errorBox = document.getElementById("error");
 const reportBox = document.getElementById("report");
 const noticeBox = document.getElementById("notice");
 const historyList = document.getElementById("history-list");
+const jobsBox = document.getElementById("jobs");
+const jobsList = document.getElementById("jobs-list");
 const historyRefresh = document.getElementById("history-refresh");
 const appBox = document.getElementById("app");
 const gate = document.getElementById("gate");
@@ -365,6 +367,36 @@ function renderHistory(items) {
   historyList.scrollTop = scroll;
 }
 
+let jobsKey = null;
+
+// Pedidos na fila, em curso ou com erro; o erro tem botão para dispensar.
+function renderJobs(items) {
+  const key = JSON.stringify(items);
+  if (key === jobsKey) return;
+  jobsKey = key;
+  jobsBox.hidden = items.length === 0;
+  jobsList.replaceChildren();
+  for (const job of items) {
+    const li = el("li", undefined, job.status === "error" ? "job error" : "job");
+    const text = el("div");
+    text.append(
+      el("div", `youtu.be/${job.video_id}`, "title"),
+      el("div", job.status === "error" ? job.error : STATUS_TEXT[job.status], "meta"),
+    );
+    li.append(text);
+    if (job.status === "error") {
+      const dismiss = el("button", "Dispensar", "small");
+      dismiss.type = "button";
+      dismiss.addEventListener("click", async () => {
+        await api(`/api/jobs/${job.video_id}`, { method: "DELETE" });
+        await refreshHistory({ manual: true });
+      });
+      li.append(dismiss);
+    }
+    jobsList.append(li);
+  }
+}
+
 // Busca a lista sem sobrepor chamadas. Erro 429/401 repetido (ou de rede) suspende o polling automático.
 async function refreshHistory({ manual = false } = {}) {
   if (manual) historyFailures = 0;
@@ -374,6 +406,9 @@ async function refreshHistory({ manual = false } = {}) {
     const response = await api("/api/analyses");
     if (!response.ok) throw new Error(String(response.status));
     renderHistory(await response.json());
+    const jobsResponse = await api("/api/jobs");
+    if (!jobsResponse.ok) throw new Error(String(jobsResponse.status));
+    renderJobs(await jobsResponse.json());
     historyFailures = 0;
   } catch (error) {
     historyFailures++;
