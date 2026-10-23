@@ -51,7 +51,7 @@ class AnalysisRequest(BaseModel):
         default=False,
         description=(
             "False (padrão): só enfileira para o worker. True: a própria API tenta extrair "
-            "em segundo plano por até 60 s (pelo proxy `PROXY_*`, se configurado); se não "
+            "antes de responder, por até 60 s (pelo proxy `PROXY_*`, se configurado); se não "
             "terminar, o job volta à fila para o worker."
         ),
     )

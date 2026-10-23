@@ -482,7 +482,7 @@ async function analyze(event) {
   noticeBox.hidden = true;
   reportBox.hidden = true;
   submit.disabled = true;
-  statusBox.textContent = "Enviando...";
+  statusBox.textContent = extractNow.checked ? "Extraindo a música (até 60 s)..." : "Enviando...";
   statusBox.hidden = false;
   try {
     const response = await api("/api/analyses", {

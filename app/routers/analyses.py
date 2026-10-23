@@ -5,7 +5,6 @@ from typing import Annotated
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     HTTPException,
     Query,
@@ -60,7 +59,7 @@ def list_ceilings() -> CeilingsOut:
     description=(
         "Recebe o link do YouTube. Se o vídeo já foi analisado, responde 200 com "
         "`already_analyzed` e a data; senão responde 202 e enfileira para o worker. "
-        "Com `extract_now`, a API tenta extrair em segundo plano por até 60 s (pelo proxy "
+        "Com `extract_now`, a API tenta extrair antes de responder, por até 60 s (pelo proxy "
         "`PROXY_*`, se configurado) e, se não der, o job fica na fila para o worker. "
         "Responde 429 se o IP passou do limite de novos pedidos por hora."
     ),
@@ -70,7 +69,6 @@ async def create_analysis(
     request: Request,
     response: Response,
     session: Session,
-    background: BackgroundTasks,
 ) -> AnalysisCreated:
     """Identifica o vídeo, reaproveita a análise guardada ou enfileira uma nova."""
     try:
@@ -93,7 +91,7 @@ async def create_analysis(
         if await jobs.start(session, video_id):
             ratelimit.record(client)
             if body.extract_now:
-                background.add_task(worker.extract_in_api, video_id)
+                await worker.extract_in_api(video_id)
     response.status_code = status.HTTP_202_ACCEPTED
     return AnalysisCreated(video_id=video_id, already_analyzed=False)
 

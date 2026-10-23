@@ -2,6 +2,7 @@
 
 ## Não lançado
 
+- **`extract_now` aguarda na requisição:** a API extrai antes de responder (até 60 s) em vez de usar `BackgroundTasks`, para a plataforma não cortar a instância no meio do trabalho. A resposta continua 202; a tela mostra "Extraindo..." enquanto espera.
 - **Pedidos visíveis:** nova seção "Pedidos em andamento" na tela com os pedidos na fila, em curso ou com erro (com a mensagem do worker) e botão "Dispensar" nos erros. API: `GET /api/jobs` e `DELETE /api/jobs/{video_id}` (só remove a falha; 409 se o pedido está na fila ou em curso; não toca na análise guardada).
 - **Worker remoto no Docker:** `make worker-remote` sobe o worker em segundo plano (perfil `remote`, lê `DATABASE_URL` e `PROXY_*` do `.env`), com `make worker-remote-logs` e `make worker-remote-down`. Os serviços `app` e `worker` do compose passam a usar sempre o Postgres do compose e não leem mais `DATABASE_URL` do `.env`.
 - **Front:** se a API responder com erro (que não seja 401) ou a rede falhar, o app aparece com a mensagem em vez de uma tela vazia; assets versionados (`?v=`) para furar o cache.
