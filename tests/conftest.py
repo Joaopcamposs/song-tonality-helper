@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import pytest_asyncio
 import soundfile as sf
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.services import ratelimit, store
@@ -45,10 +46,10 @@ async def db(tmp_path: Path):
     if url is None:
         store.configure(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
     else:
-        # O Postgres persiste entre testes: limpa as tabelas antes de cada um.
+        # O Postgres persiste entre testes: apaga o schema do app antes de cada um.
         cleaner = create_async_engine(url)
         async with cleaner.begin() as connection:
-            await connection.run_sync(store.Base.metadata.drop_all)
+            await connection.execute(text(f'DROP SCHEMA IF EXISTS "{store.SCHEMA}" CASCADE'))
         await cleaner.dispose()
         store.configure(url)
     await store.create_tables()

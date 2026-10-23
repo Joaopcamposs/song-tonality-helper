@@ -2,6 +2,7 @@
 
 ## Não lançado
 
+- **Schema próprio no Postgres:** as tabelas `analyses` e `jobs` agora vivem no schema `song-tonality-helper` (criado na subida); no SQLite nada muda. Quem já tinha tabelas no schema `public` precisa recriá-las ou movê-las (`ALTER TABLE ... SET SCHEMA`).
 - **Worker local:** a API agora só enfileira o pedido (job `pending`, "Na fila" na tela); `python -m app.worker` (`make worker`, serviço `worker` no `compose.yaml`) baixa, analisa e grava, consultando o banco a cada `WORKER_POLL_SECONDS` (padrão 5). Ao subir, o worker devolve à fila jobs interrompidos; a API não marca mais jobs como "interrompidos" na subida.
 - Limite de pedidos: no máximo `MAX_REQUESTS_PER_HOUR` (padrão 20) novos pedidos por IP por hora, com 429 ao exceder; análise já guardada ou job em curso não conta.
 - **Mudança de configuração:** `DATABASE_PATH` foi substituída por `DATABASE_URL` (SQLite ou Postgres via `asyncpg`; padrão `sqlite+aiosqlite:///data/analyses.db`). O andamento dos jobs agora fica na tabela `jobs` do banco, e jobs interrompidos por reinício viram erro ("Análise interrompida, tente de novo.").

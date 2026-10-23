@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-from sqlalchemy import JSON, String, make_url, select
+from sqlalchemy import JSON, MetaData, String, make_url, select, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -16,9 +16,14 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.domain.pitch import ALGO_VERSION, AudioFeatures
 
+# Schema próprio no Postgres, para dividir o banco com outros apps; o SQLite não tem schema.
+SCHEMA = "song-tonality-helper"
+
 
 class Base(DeclarativeBase):
-    """Base declarativa das tabelas."""
+    """Base declarativa das tabelas, todas no schema `SCHEMA`."""
+
+    metadata = MetaData(schema=SCHEMA)
 
 
 class Analysis(Base):
@@ -61,14 +66,19 @@ def configure(url: str) -> None:
     parsed = make_url(url)
     if parsed.get_backend_name() == "sqlite" and parsed.database:
         Path(parsed.database).parent.mkdir(parents=True, exist_ok=True)
-    _engine = create_async_engine(url)
+    options = (
+        {"schema_translate_map": {SCHEMA: None}} if parsed.get_backend_name() == "sqlite" else {}
+    )
+    _engine = create_async_engine(url, execution_options=options)
     _sessions = async_sessionmaker(_engine, expire_on_commit=False)
 
 
 async def create_tables() -> None:
-    """Cria as tabelas que ainda não existem."""
+    """Cria o schema (só no Postgres) e as tabelas que ainda não existem."""
     assert _engine is not None, "store.configure() não foi chamado"
     async with _engine.begin() as connection:
+        if connection.dialect.name == "postgresql":
+            await connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{SCHEMA}"'))
         await connection.run_sync(Base.metadata.create_all)
 
 
