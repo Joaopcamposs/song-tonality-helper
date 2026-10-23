@@ -16,7 +16,7 @@ make run          # http://localhost:8007
 3. Clique em Analisar e leia o relatório: nota mais aguda, tom detectado, deslocamento em semitons, novo tom, grau da nota, trechos em que ela aparece e o ranking das notas.
 4. A análise fica guardada: colar de novo o mesmo vídeo (em qualquer forma de link) avisa que já foi analisado e mostra o resultado na hora. A lista "Músicas já analisadas" reabre qualquer uma, e trocar o teto recalcula o relatório sem baixar nada. O botão "Apagar" (com confirmação) tira a música da lista.
 
-As análises ficam num SQLite em `data/analyses.db` (mude com a variável `DATABASE_PATH`; apague o arquivo para recomeçar). No Docker o banco fica no volume `song-tonality-data`.
+As análises e o andamento dos jobs ficam num banco escolhido por `DATABASE_URL`: por padrão SQLite em `data/analyses.db` (`sqlite+aiosqlite:///data/analyses.db`; apague o arquivo para recomeçar), ou Postgres (`postgresql+asyncpg://usuario:senha@host:5432/banco`). No Docker o SQLite fica no volume `song-tonality-data`. Para rodar os testes contra Postgres, defina `TEST_DATABASE_URL` (as tabelas são recriadas a cada teste, use um banco descartável).
 
 Com Docker: `make up` (mesma porta) e `make down`.
 

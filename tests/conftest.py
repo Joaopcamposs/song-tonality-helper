@@ -1,3 +1,4 @@
+import os
 from collections.abc import Callable
 from pathlib import Path
 
@@ -5,6 +6,7 @@ import numpy as np
 import pytest
 import pytest_asyncio
 import soundfile as sf
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.services import store
 
@@ -38,8 +40,17 @@ def make_wav(tmp_path: Path) -> Callable[[list[tuple[int | None, float]]], Path]
 
 @pytest_asyncio.fixture(autouse=True)
 async def db(tmp_path: Path):
-    """Banco SQLite novo em arquivo temporário para cada teste."""
-    store.configure(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
+    """Banco novo para cada teste: SQLite temporário ou o Postgres de `TEST_DATABASE_URL`."""
+    url = os.environ.get("TEST_DATABASE_URL")
+    if url is None:
+        store.configure(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
+    else:
+        # O Postgres persiste entre testes: limpa as tabelas antes de cada um.
+        cleaner = create_async_engine(url)
+        async with cleaner.begin() as connection:
+            await connection.run_sync(store.Base.metadata.drop_all)
+        await cleaner.dispose()
+        store.configure(url)
     await store.create_tables()
     yield
     await store.dispose()

@@ -2,6 +2,7 @@
 
 ## Não lançado
 
+- **Mudança de configuração:** `DATABASE_PATH` foi substituída por `DATABASE_URL` (SQLite ou Postgres via `asyncpg`; padrão `sqlite+aiosqlite:///data/analyses.db`). O andamento dos jobs agora fica na tabela `jobs` do banco, e jobs interrompidos por reinício viram erro ("Análise interrompida, tente de novo.").
 - Metadados de web app: favicon, ícone do iOS (`apple-touch-icon`), `manifest.webmanifest` e imagem de compartilhamento, para instalar na tela inicial do iPhone e abrir em tela cheia.
 - `compose.yaml` com a API e o Cloudflare Tunnel para publicar o app em casa (token em `.env`, modelo em `.env.example`).
 - Apagar uma música da lista (botão com confirmação na tela; `DELETE /api/analyses/{video_id}`, 204, 404 se não existe e 409 se está em análise).

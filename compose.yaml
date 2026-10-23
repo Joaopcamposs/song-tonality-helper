@@ -11,6 +11,17 @@ services:
     volumes:
       - song-tonality-data:/srv/data
 
+  # Postgres só para desenvolvimento: `docker compose --profile dev up -d db` e
+  # DATABASE_URL=postgresql+asyncpg://postgres:dev@localhost:5432/stm
+  db:
+    image: postgres:17
+    profiles: [dev]
+    environment:
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: stm
+    ports:
+      - "127.0.0.1:5432:5432"
+
   tunnel:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
