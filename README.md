@@ -25,7 +25,8 @@ A API só enfileira o pedido (status "na fila"); quem baixa e analisa é o worke
 | Variável | Quem usa | Padrão |
 | --- | --- | --- |
 | `DATABASE_URL` | API e worker (o mesmo banco); obrigatória | nenhum (no `make`/compose, o Postgres local) |
-| `DOWNLOAD_PROXY_URL` | API: experimento, veja "Publicar no FastAPI Cloud"; segredo | vazia (desligado) |
+| `PROXY_USERNAME`, `PROXY_PASSWORD` | API: experimento de proxy, veja abaixo; segredos | vazias (desligado) |
+| `PROXY_HOST`, `PROXY_COUNTRY`, `PROXY_SESSION_MINUTES` | API: opções do proxy, veja abaixo | veja abaixo |
 | `WORKER_POLL_SECONDS` | worker: intervalo entre consultas à fila | `5` |
 | `APP_PASSPHRASE` | API: palavra secreta; se definida, toda rota `/api` (menos `/api/health`) exige o cabeçalho `X-App-Passphrase` e a tela pede a palavra (guardada no `localStorage`); 10 erros por hora por IP levam a 429. Vazia ou ausente: sem proteção. Use só ASCII (sem acentos): o cabeçalho HTTP é latin-1. O front estático continua público | vazia |
 | `MAX_REQUESTS_PER_HOUR` | API: novos pedidos por IP por hora (429 ao exceder; reaproveitar análise guardada ou job em curso não conta) | `20` |
@@ -78,13 +79,20 @@ A API e o front podem ficar no FastAPI Cloud (`[tool.fastapi]` no `pyproject.tom
 2. No painel do app, defina as variáveis `DATABASE_URL` (`postgresql+asyncpg://...` do Neon) e `APP_PASSPHRASE` (ASCII).
 3. O worker em casa usa o mesmo `DATABASE_URL`. Fora do túnel da Cloudflare não existe `CF-Connecting-IP`, então o limite por IP cai para o IP visto pelo servidor.
 
-### Experimento: baixar pela API com proxy (`DOWNLOAD_PROXY_URL`)
+### Experimento: baixar pela API com proxy (`PROXY_*`)
 
-Desligado por padrão. Se `DOWNLOAD_PROXY_URL` (ex.: `http://usuario:senha@host:porta`) estiver definida na API, cada pedido novo faz a própria API tentar baixar e analisar a música pelo proxy. Se o download falhar (bloqueio, proxy fora, rede), o job volta para "na fila" sem erro e o worker em casa assume; erros de análise (ex.: sem melodia) viram erro normalmente. O log diz se cada job foi resolvido "via proxy" ou "via worker".
+Desligado por padrão. Se `PROXY_USERNAME` e `PROXY_PASSWORD` estiverem definidas na API, cada pedido novo faz a própria API tentar baixar e analisar a música pelo proxy. Se o download falhar (bloqueio, proxy fora, rede), o job volta para "na fila" sem erro e o worker em casa assume; erros de análise (ex.: sem melodia) viram erro normalmente. O log diz se cada job foi resolvido "via proxy" ou "via worker".
+
+| Variável | Padrão | O que faz |
+|---|---|---|
+| `PROXY_USERNAME`, `PROXY_PASSWORD` | vazio | proxy residencial (formato Oxylabs: o usuário vira `customer-<user>-cc-<país>`). Sem eles o download sai direto. Aqui só o download do yt-dlp usa |
+| `PROXY_HOST` | `pr.oxylabs.io:7777` | endereço do proxy |
+| `PROXY_COUNTRY` | vazio | país de saída (ex.: `br`) |
+| `PROXY_SESSION_MINUTES` | vazio | vazio: IP novo a cada request (rotativo); número: IP fixo por esse tempo (sticky) |
 
 - O proxy precisa ser **residencial e rotativo**: o YouTube bloqueia IPs de nuvem e de datacenter.
 - Proxies residenciais costumam cobrar por tráfego (GB), e cada tentativa baixa o áudio do vídeo, então acompanhe o custo.
-- A URL é segredo: defina-a só nas variáveis do app e nunca a coloque em log nem no git. O `ffmpeg` não precisa existir no sistema da nuvem: sem ele, usa-se o do pacote `imageio-ffmpeg`.
+- Usuário e senha são segredo: defina-os só nas variáveis do app e nunca a coloque em log nem no git. O `ffmpeg` não precisa existir no sistema da nuvem: sem ele, usa-se o do pacote `imageio-ffmpeg`.
 - Não verificado com proxy real; só com testes que substituem o yt-dlp. Rodar o worker em casa continua necessário como fallback.
 
 ## Origem da ideia

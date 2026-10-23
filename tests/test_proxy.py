@@ -12,10 +12,11 @@ from app.domain.features import AudioFeatures
 from app.main import app
 from app.services import jobs, store
 from app.services.download import DownloadedAudio
+from app.services.proxy import ProxyConfig
 
 VIDEO_ID = "dQw4w9WgXcQ"
 URL = f"https://www.youtube.com/watch?v={VIDEO_ID}"
-PROXY = "http://usuario:segredo123@proxy.exemplo:8080"
+PROXY = "http://customer-usuario:segredo%40123@proxy.exemplo:8080"
 
 
 @pytest_asyncio.fixture
@@ -59,7 +60,8 @@ async def _saved() -> bool:
 
 
 async def test_proxy_off_leaves_job_pending(client, pipeline, monkeypatch):
-    monkeypatch.delenv("DOWNLOAD_PROXY_URL", raising=False)
+    monkeypatch.delenv("PROXY_USERNAME", raising=False)
+    monkeypatch.delenv("PROXY_PASSWORD", raising=False)
     calls, _ = pipeline
     await client.post("/api/analyses", json={"url": URL})
     assert calls == []
@@ -67,7 +69,9 @@ async def test_proxy_off_leaves_job_pending(client, pipeline, monkeypatch):
 
 
 async def test_proxy_on_finishes_without_worker(client, pipeline, monkeypatch):
-    monkeypatch.setenv("DOWNLOAD_PROXY_URL", PROXY)
+    monkeypatch.setenv("PROXY_USERNAME", "usuario")
+    monkeypatch.setenv("PROXY_PASSWORD", "segredo@123")
+    monkeypatch.setenv("PROXY_HOST", "proxy.exemplo:8080")
     calls, _ = pipeline
     await client.post("/api/analyses", json={"url": URL})
     assert calls == [PROXY]
@@ -78,7 +82,9 @@ async def test_proxy_on_finishes_without_worker(client, pipeline, monkeypatch):
 async def test_download_failure_returns_to_pending_and_worker_finishes(
     client, pipeline, monkeypatch
 ):
-    monkeypatch.setenv("DOWNLOAD_PROXY_URL", PROXY)
+    monkeypatch.setenv("PROXY_USERNAME", "usuario")
+    monkeypatch.setenv("PROXY_PASSWORD", "segredo@123")
+    monkeypatch.setenv("PROXY_HOST", "proxy.exemplo:8080")
     calls, behavior = pipeline
     behavior["download"] = DownloadError("Não consegui baixar o áudio deste vídeo.")
     await client.post("/api/analyses", json={"url": URL})
@@ -89,7 +95,9 @@ async def test_download_failure_returns_to_pending_and_worker_finishes(
 
 
 async def test_analysis_error_is_not_retried_by_worker(client, pipeline, monkeypatch):
-    monkeypatch.setenv("DOWNLOAD_PROXY_URL", PROXY)
+    monkeypatch.setenv("PROXY_USERNAME", "usuario")
+    monkeypatch.setenv("PROXY_PASSWORD", "segredo@123")
+    monkeypatch.setenv("PROXY_HOST", "proxy.exemplo:8080")
     _, behavior = pipeline
     behavior["analyze"] = NoMelodyError("Não encontrei uma melodia detectável.")
     await client.post("/api/analyses", json={"url": URL})
@@ -97,7 +105,9 @@ async def test_analysis_error_is_not_retried_by_worker(client, pipeline, monkeyp
 
 
 async def test_unexpected_error_returns_to_pending(client, pipeline, monkeypatch):
-    monkeypatch.setenv("DOWNLOAD_PROXY_URL", PROXY)
+    monkeypatch.setenv("PROXY_USERNAME", "usuario")
+    monkeypatch.setenv("PROXY_PASSWORD", "segredo@123")
+    monkeypatch.setenv("PROXY_HOST", "proxy.exemplo:8080")
     _, behavior = pipeline
     behavior["download"] = RuntimeError("quebrou")
     await client.post("/api/analyses", json={"url": URL})
@@ -105,7 +115,9 @@ async def test_unexpected_error_returns_to_pending(client, pipeline, monkeypatch
 
 
 async def test_job_claimed_by_worker_is_not_touched(pipeline, monkeypatch):
-    monkeypatch.setenv("DOWNLOAD_PROXY_URL", PROXY)
+    monkeypatch.setenv("PROXY_USERNAME", "usuario")
+    monkeypatch.setenv("PROXY_PASSWORD", "segredo@123")
+    monkeypatch.setenv("PROXY_HOST", "proxy.exemplo:8080")
     calls, _ = pipeline
     async with store.session() as session:
         await jobs.start(session, VIDEO_ID)
@@ -117,11 +129,35 @@ async def test_job_claimed_by_worker_is_not_touched(pipeline, monkeypatch):
 
 
 async def test_proxy_url_never_reaches_logs(client, pipeline, monkeypatch, caplog):
-    monkeypatch.setenv("DOWNLOAD_PROXY_URL", PROXY)
+    monkeypatch.setenv("PROXY_USERNAME", "usuario")
+    monkeypatch.setenv("PROXY_PASSWORD", "segredo@123")
+    monkeypatch.setenv("PROXY_HOST", "proxy.exemplo:8080")
     _, behavior = pipeline
     behavior["download"] = RuntimeError(f"falha ao conectar em {PROXY}")
     with caplog.at_level(logging.DEBUG):
         await client.post("/api/analyses", json={"url": URL})
     assert caplog.records
-    assert "segredo123" not in caplog.text
+    assert "segredo@123" not in caplog.text
+    assert "segredo%40123" not in caplog.text
+    assert "customer-usuario" not in caplog.text
     assert PROXY not in caplog.text
+
+
+def test_from_env_requires_credentials() -> None:
+    assert ProxyConfig.from_env({"PROXY_USERNAME": "u"}) is None
+    assert ProxyConfig.from_env({}) is None
+
+
+def test_url_rotates_by_default_and_encodes_password() -> None:
+    config = ProxyConfig.from_env(
+        {"PROXY_USERNAME": "u", "PROXY_PASSWORD": "p@ss/w", "PROXY_COUNTRY": "br"}
+    )
+    assert config is not None
+    assert config.url() == "http://customer-u-cc-br:p%40ss%2Fw@pr.oxylabs.io:7777"
+
+
+def test_url_is_sticky_with_session_minutes() -> None:
+    config = ProxyConfig("u", "p", session_minutes=10)
+    url = config.url()
+    assert "-sesstime-10:" in url and "-sessid-" in url
+    assert url != config.url()  # sessão nova a cada url()

@@ -59,7 +59,7 @@ def list_ceilings() -> CeilingsOut:
     description=(
         "Recebe o link do YouTube. Se o vídeo já foi analisado, responde 200 com "
         "`already_analyzed` e a data; senão responde 202 e enfileira para o worker "
-        "(com `DOWNLOAD_PROXY_URL`, a API tenta antes, pelo proxy). "
+        "(com `PROXY_USERNAME` e `PROXY_PASSWORD`, a API tenta antes, pelo proxy). "
         "Responde 429 se o IP passou do limite de novos pedidos por hora."
     ),
 )

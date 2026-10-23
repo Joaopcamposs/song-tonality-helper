@@ -4,7 +4,7 @@ import logging
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 import imageio_ffmpeg
 import yt_dlp
@@ -26,12 +26,16 @@ class DownloadedAudio:
 
 
 def redact(text: str, secret: str | None) -> str:
-    """Troca o segredo (URL do proxy e a senha dentro dela) por `***` antes de logar."""
+    """Troca por `***` a URL do proxy, o usuário (`customer-...`) e a senha, crua e codificada."""
     if not secret:
         return text
-    text = text.replace(secret, "***")
-    password = urlsplit(secret).password
-    return text.replace(password, "***") if password else text
+    parts = urlsplit(secret)
+    hidden = [secret, parts.username, parts.password]
+    hidden.append(unquote(parts.password) if parts.password else None)
+    # Mais longos primeiro, para a URL inteira sumir antes de seus pedaços.
+    for item in sorted(filter(None, hidden), key=len, reverse=True):
+        text = text.replace(item, "***")
+    return text
 
 
 def download_audio(video_id: str, dest_dir: Path, proxy: str | None = None) -> DownloadedAudio:

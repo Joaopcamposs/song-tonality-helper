@@ -1,7 +1,7 @@
 """Worker: processa os jobs pendentes do banco (baixa o áudio, analisa e grava o resultado).
 
 Uso: `python -m app.worker`. Rode um único worker por banco. A API também pode tentar um job
-pelo proxy de `DOWNLOAD_PROXY_URL` (`try_with_proxy`, experimento); se falhar, o worker assume.
+pelo proxy de `PROXY_*` (`try_with_proxy`, experimento); se falhar, o worker assume.
 """
 
 import asyncio
@@ -19,6 +19,7 @@ from app.domain.features import ALGO_VERSION
 from app.domain.pitch import analyze_audio
 from app.services import jobs, store
 from app.services.download import download_audio, redact
+from app.services.proxy import ProxyConfig
 from app.services.store import Job, JobStatus
 
 logger = logging.getLogger(__name__)
@@ -47,8 +48,12 @@ async def _fail(video_id: str, message: str) -> None:
 
 
 def proxy_url() -> str | None:
-    """URL do proxy de download (segredo); None quando o experimento está desligado."""
-    return os.environ.get("DOWNLOAD_PROXY_URL") or None
+    """URL do proxy de download (segredo); None quando as credenciais `PROXY_*` faltam.
+
+    Com sessão sticky, cada chamada gera uma URL nova: chame uma vez por tentativa.
+    """
+    config = ProxyConfig.from_env(os.environ)
+    return config.url() if config else None
 
 
 async def _requeue(video_id: str) -> None:
