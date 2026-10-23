@@ -1,10 +1,11 @@
-"""Armazenamento das análises em SQLite (SQLAlchemy assíncrono)."""
+"""Armazenamento das análises no Postgres (SQLAlchemy assíncrono)."""
 
+import os
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from pathlib import Path
+from typing import Literal
 
-from sqlalchemy import JSON, select
+from sqlalchemy import JSON, MetaData, String, select, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -13,11 +14,17 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from app.domain.pitch import ALGO_VERSION, AudioFeatures
+from app.domain.errors import DomainError
+from app.domain.features import ALGO_VERSION, AudioFeatures
+
+# Schema próprio no Postgres, para dividir o banco com outros apps.
+SCHEMA = "song-tonality-helper"
 
 
 class Base(DeclarativeBase):
-    """Base declarativa das tabelas."""
+    """Base declarativa das tabelas, todas no schema `SCHEMA`."""
+
+    metadata = MetaData(schema=SCHEMA)
 
 
 class Analysis(Base):
@@ -33,25 +40,51 @@ class Analysis(Base):
     top_times: Mapped[list[float]] = mapped_column(JSON)
     chroma_profile: Mapped[list[float]] = mapped_column(JSON)
     algo_version: Mapped[int]
-    created_at: Mapped[datetime]  # UTC; o SQLite devolve sem fuso
+    created_at: Mapped[datetime]  # UTC ingênuo (coluna sem fuso)
+
+
+JobStatus = Literal["pending", "downloading", "analyzing", "error"]
+
+
+class Job(Base):
+    """Andamento de uma análise em curso ou que falhou, chaveado pelo id do vídeo."""
+
+    __tablename__ = "jobs"
+
+    video_id: Mapped[str] = mapped_column(primary_key=True)
+    status: Mapped[JobStatus] = mapped_column(String)
+    error: Mapped[str | None]
+    updated_at: Mapped[datetime]  # UTC ingênuo, como em Analysis
 
 
 _engine: AsyncEngine | None = None
 _sessions: async_sessionmaker[AsyncSession] | None = None
 
 
-def configure(database_path: Path) -> None:
-    """Aponta o armazenamento para o arquivo informado, criando a pasta se faltar."""
+def database_url() -> str:
+    """Lê `DATABASE_URL` do ambiente; sem ela o app não sobe."""
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise DomainError(
+            "Defina DATABASE_URL com a URL do Postgres "
+            "(postgresql+asyncpg://usuario:senha@host:5432/banco); "
+            "localmente, rode `make db` e use `make run`."
+        )
+    return url
+
+
+def configure(url: str) -> None:
+    """Aponta o armazenamento para o Postgres da URL (`postgresql+asyncpg://...`)."""
     global _engine, _sessions
-    database_path.parent.mkdir(parents=True, exist_ok=True)
-    _engine = create_async_engine(f"sqlite+aiosqlite:///{database_path}")
+    _engine = create_async_engine(url)
     _sessions = async_sessionmaker(_engine, expire_on_commit=False)
 
 
 async def create_tables() -> None:
-    """Cria as tabelas que ainda não existem."""
+    """Cria o schema e as tabelas que ainda não existem."""
     assert _engine is not None, "store.configure() não foi chamado"
     async with _engine.begin() as connection:
+        await connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{SCHEMA}"'))
         await connection.run_sync(Base.metadata.create_all)
 
 

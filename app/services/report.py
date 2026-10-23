@@ -1,8 +1,8 @@
 """Monta o relatório final a partir das features do áudio e do teto escolhido."""
 
+from app.domain.features import AudioFeatures
 from app.domain.key import detect_key
 from app.domain.notes import note_label, pitch_class_name
-from app.domain.pitch import AudioFeatures
 from app.domain.schemas import KeyOut, NoteOut, RankedNote, Report
 from app.domain.transposition import scale_degree, shift_semitones, transpose_tonic
 

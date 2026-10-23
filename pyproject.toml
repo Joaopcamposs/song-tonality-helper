@@ -3,15 +3,16 @@ name = "song-tonality-helper"
 version = "0.2.0"
 requires-python = ">=3.14,<3.15"
 dependencies = [
-    "fastapi",
+    "fastapi[standard]",
     "uvicorn[standard]",
+    "numpy",
+    "sqlalchemy[asyncio]>=2.1.6",
+    "asyncpg>=0.32.0",
     "yt-dlp",
     "librosa",
-    "numpy",
     "scipy",
     "soundfile",
-    "sqlalchemy[asyncio]>=2.1.6",
-    "aiosqlite>=0.22.1",
+    "imageio-ffmpeg",
 ]
 
 [dependency-groups]
@@ -35,3 +36,6 @@ select = ["E", "F", "I", "UP", "B", "D1"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.fastapi]
+entrypoint = "app.main:app"

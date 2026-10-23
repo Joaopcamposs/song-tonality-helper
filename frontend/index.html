@@ -21,9 +21,23 @@
   <link rel="icon" href="/brand/logo.svg" type="image/svg+xml">
   <link rel="icon" href="/brand/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
-<body>
+<body class="locked">
+  <section id="gate" class="gate" hidden>
+    <form id="gate-form" class="panel stack">
+      <div class="gate-brand">
+        <img class="pick-logo" src="brand/logo.svg" alt="">
+        <span class="brand-name">Song Tonality Helper</span>
+      </div>
+      <label><span id="gate-message">Digite a palavra secreta:</span>
+        <input id="gate-input" type="password" required autocomplete="current-password">
+      </label>
+      <button class="primary big" type="submit">Entrar</button>
+    </form>
+  </section>
+
+  <div id="app" hidden inert>
   <header class="top">
     <a class="brand" href="/">
       <img class="pick-logo" src="brand/logo.svg" alt="">
@@ -45,6 +59,13 @@
         <select id="ceiling"></select>
       </label>
       <p class="hint">Numeração padrão: dó central = C4.</p>
+      <label class="switch-row">
+        <span class="switch-text">
+          <b>Método de extração</b>
+          <small id="extract-now-text">Enviar para o worker (processa em segundo plano)</small>
+        </span>
+        <input id="extract-now" class="switch" type="checkbox" role="switch">
+      </label>
       <button id="submit" class="primary big" type="submit">Analisar</button>
     </form>
 
@@ -54,10 +75,14 @@
     <section id="report" hidden></section>
 
     <section id="history">
-      <h2>Músicas já analisadas</h2>
+      <div class="history-head">
+        <h2>Músicas já analisadas</h2>
+        <button id="history-refresh" class="small" type="button">Atualizar</button>
+      </div>
       <ul id="history-list"></ul>
     </section>
   </main>
-  <script src="app.js"></script>
+  </div>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

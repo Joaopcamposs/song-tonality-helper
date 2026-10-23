@@ -1,6 +1,5 @@
 """Aplicação FastAPI: expõe a API em /api e serve o front estático."""
 
-import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -14,8 +13,8 @@ from app.services import store
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
-    """Abre o banco na subida (`DATABASE_PATH`) e fecha as conexões ao desligar."""
-    store.configure(Path(os.environ.get("DATABASE_PATH", "data/analyses.db")))
+    """Abre o banco na subida (`DATABASE_URL`) e fecha as conexões ao desligar."""
+    store.configure(store.database_url())
     await store.create_tables()
     yield
     await store.dispose()

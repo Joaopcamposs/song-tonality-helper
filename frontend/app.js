@@ -2,10 +2,23 @@
 // Todo dado vindo da API entra na página por textContent, nunca por innerHTML.
 
 const CEILING_KEY = "ceilingMidi";
+const PASSPHRASE_KEY = "passphrase";
+const PASSPHRASE_HEADER = "X-App-Passphrase";
 const POLL_MS = 2000;
+const HISTORY_POLL_MS = 10000;
+const HISTORY_MAX_FAILURES = 3;
 const CONFIRM_MS = 4000;
 const FETCH_ATTEMPTS = 3;
+const SLOW_MS = 5 * 60 * 1000;
+const EXTRACT_KEY = "extractNow";
+const BACKGROUND_TEXT = "Pedido recebido: a música está sendo processada em segundo plano. Quando ficar pronta, ela aparece na lista de músicas analisadas.";
+const SLOW_TEXT = "Está demorando: o worker pode estar desligado.";
+const EXTRACT_LABEL = {
+  true: "Extrair agora (até 60 s; se não der, vai para o worker)",
+  false: "Enviar para o worker (processa em segundo plano)",
+};
 const STATUS_TEXT = {
+  pending: "Na fila, aguardando o worker...",
   downloading: "Baixando o áudio do vídeo...",
   analyzing: "Analisando a melodia e o tom...",
 };
@@ -13,12 +26,20 @@ const STATUS_TEXT = {
 const form = document.getElementById("form");
 const urlInput = document.getElementById("url");
 const ceilingSelect = document.getElementById("ceiling");
+const extractNow = document.getElementById("extract-now");
+const extractNowText = document.getElementById("extract-now-text");
 const submit = document.getElementById("submit");
 const statusBox = document.getElementById("status");
 const errorBox = document.getElementById("error");
 const reportBox = document.getElementById("report");
 const noticeBox = document.getElementById("notice");
 const historyList = document.getElementById("history-list");
+const historyRefresh = document.getElementById("history-refresh");
+const appBox = document.getElementById("app");
+const gate = document.getElementById("gate");
+const gateForm = document.getElementById("gate-form");
+const gateInput = document.getElementById("gate-input");
+const gateMessage = document.getElementById("gate-message");
 
 let currentVideoId = null;
 let activeRun = 0; // cada ação do usuário abre uma execução nova; as anteriores desistem de atualizar a tela
@@ -36,6 +57,111 @@ function saveCeiling(midi) {
     localStorage.setItem(CEILING_KEY, midi);
   } catch {
     // Sem armazenamento: a escolha só vale nesta visita.
+  }
+}
+
+function readSavedExtractNow() {
+  try {
+    return localStorage.getItem(EXTRACT_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function saveExtractNow(value) {
+  try {
+    localStorage.setItem(EXTRACT_KEY, String(value));
+  } catch {
+    // Sem armazenamento: a escolha só vale nesta visita.
+  }
+}
+
+// O texto do switch acompanha o estado marcado.
+function showExtractLabel() {
+  extractNowText.textContent = EXTRACT_LABEL[extractNow.checked];
+}
+
+function readSavedPassphrase() {
+  try {
+    return localStorage.getItem(PASSPHRASE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function savePassphrase(value) {
+  try {
+    if (value) localStorage.setItem(PASSPHRASE_KEY, value);
+    else localStorage.removeItem(PASSPHRASE_KEY);
+  } catch {
+    // Sem armazenamento: a palavra só vale até fechar a página.
+  }
+}
+
+let passphrase = readSavedPassphrase();
+let passphraseAsk = null; // pedido de palavra em andamento, compartilhado pelas chamadas simultâneas
+
+// Mostra a tela só com o campo da palavra secreta e devolve o que a pessoa digitar.
+function askPassphrase(message) {
+  if (passphraseAsk) return passphraseAsk;
+  passphraseAsk = new Promise((resolve) => {
+    lock();
+    gateMessage.textContent = message;
+    gateInput.value = "";
+    gateInput.focus();
+    gateForm.addEventListener(
+      "submit",
+      (event) => {
+        event.preventDefault();
+        passphraseAsk = null;
+        resolve(gateInput.value);
+      },
+      { once: true },
+    );
+  });
+  return passphraseAsk;
+}
+
+// Esconde o app (hidden + inert: fora do foco e dos leitores de tela) e mostra só a palavra secreta.
+function lock() {
+  appBox.hidden = true;
+  appBox.inert = true;
+  gate.hidden = false;
+  document.body.classList.add("locked");
+}
+
+// Primeira chamada aceita: revela o app e some com a tela da palavra.
+function unlock() {
+  if (!appBox.hidden) return;
+  gate.hidden = true;
+  appBox.hidden = false;
+  appBox.inert = false;
+  document.body.classList.remove("locked");
+}
+
+// fetch da API: manda a palavra secreta guardada e, se a API recusar (401), pede de novo e reenvia.
+async function api(url, options = {}) {
+  for (;;) {
+    const sent = passphrase;
+    const headers = { ...options.headers };
+    if (passphrase) headers[PASSPHRASE_HEADER] = passphrase;
+    let response;
+    try {
+      response = await fetch(url, { ...options, headers });
+    } catch (error) {
+      unlock(); // sem rede: mostra o app com o erro, nunca uma tela vazia
+      throw error;
+    }
+    if (response.status !== 401) {
+      unlock(); // qualquer resposta que não seja 401 mostra o app (erros aparecem nos avisos)
+      return response;
+    }
+    if (passphrase !== sent) continue; // outra chamada já trocou a palavra: só reenvia
+    const message = passphrase ? "Palavra secreta recusada. Digite de novo:" : "Digite a palavra secreta:";
+    passphrase = "";
+    savePassphrase("");
+    passphrase = await askPassphrase(message);
+    savePassphrase(passphrase);
   }
 }
 
@@ -61,7 +187,8 @@ function signed(n) {
 }
 
 async function loadCeilings() {
-  const response = await fetch("/api/ceilings");
+  const response = await api("/api/ceilings");
+  if (!response.ok) throw new Error("ceilings");
   const data = await response.json();
   const saved = Number(readSavedCeiling());
   const wanted = data.options.some((o) => o.midi === saved) ? saved : data.default_midi;
@@ -164,7 +291,7 @@ function wait(ms) {
 async function fetchWithRetry(url) {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await fetch(url);
+      return await api(url);
     } catch (error) {
       if (attempt === FETCH_ATTEMPTS) throw error;
       await wait(POLL_MS);
@@ -174,7 +301,7 @@ async function fetchWithRetry(url) {
 
 // Busca o relatório do vídeo para o teto atual; espera enquanto a análise roda.
 // Devolve null se outra ação do usuário assumiu a tela no meio do caminho.
-async function loadReport(videoId, run = ++activeRun) {
+async function loadReport(videoId, run = ++activeRun, started = Date.now()) {
   const ceiling = Number(ceilingSelect.value);
   const response = await fetchWithRetry(`/api/analyses/${videoId}?ceiling_midi=${ceiling}`);
   if (run !== activeRun) return null;
@@ -185,21 +312,37 @@ async function loadReport(videoId, run = ++activeRun) {
     statusBox.hidden = true;
     currentVideoId = videoId;
     renderReport(analysis.report, analysis.title);
+    markSelected();
+    refreshHistory(); // o worker pode ter acabado de gravar esta música: a lista pega na hora
     return;
   }
   if (analysis.status === "error") {
     showError(analysis.error);
     return;
   }
-  statusBox.textContent = STATUS_TEXT[analysis.status];
+  const slow = Date.now() - started > SLOW_MS;
+  statusBox.textContent = slow ? `${STATUS_TEXT[analysis.status]} ${SLOW_TEXT}` : STATUS_TEXT[analysis.status];
   statusBox.hidden = false;
   await wait(POLL_MS);
-  return loadReport(videoId, run);
+  return loadReport(videoId, run, started);
 }
 
-async function loadHistory() {
-  const response = await fetch("/api/analyses");
-  const items = await response.json();
+let historyKey = null; // ids e títulos da lista desenhada; só redesenha quando muda
+let historyBusy = false;
+let historyFailures = 0;
+
+// Destaca na lista a música aberta no relatório.
+function markSelected() {
+  for (const button of historyList.querySelectorAll("li > button:first-child")) {
+    button.classList.toggle("selected", button.dataset.videoId === currentVideoId);
+  }
+}
+
+function renderHistory(items) {
+  const key = JSON.stringify(items.map((item) => [item.video_id, item.title]));
+  if (key === historyKey) return;
+  historyKey = key;
+  const scroll = historyList.scrollTop;
   historyList.replaceChildren();
   if (items.length === 0) {
     historyList.append(el("li", "Nenhuma música analisada ainda.", "muted"));
@@ -208,6 +351,7 @@ async function loadHistory() {
   for (const item of items) {
     const button = el("button");
     button.type = "button";
+    button.dataset.videoId = item.video_id;
     button.append(
       el("div", item.title, "title"),
       el("div", `${clock(item.duration_seconds)} · nota mais aguda ${noteText(item.top_note)} · ${dateText(item.created_at)}`, "meta"),
@@ -217,6 +361,32 @@ async function loadHistory() {
     li.append(button, deleteButton(item));
     historyList.append(li);
   }
+  markSelected();
+  historyList.scrollTop = scroll;
+}
+
+// Busca a lista sem sobrepor chamadas. Erro 429/401 repetido (ou de rede) suspende o polling automático.
+async function refreshHistory({ manual = false } = {}) {
+  if (manual) historyFailures = 0;
+  if (historyBusy) return;
+  historyBusy = true;
+  try {
+    const response = await api("/api/analyses");
+    if (!response.ok) throw new Error(String(response.status));
+    renderHistory(await response.json());
+    historyFailures = 0;
+  } catch (error) {
+    historyFailures++;
+    if (manual) showError("Não consegui carregar a lista de músicas.");
+  } finally {
+    historyBusy = false;
+  }
+}
+
+function pollHistory() {
+  if (document.visibilityState !== "visible" || appBox.hidden) return;
+  if (historyFailures >= HISTORY_MAX_FAILURES) return;
+  refreshHistory();
 }
 
 // Dois cliques para apagar: o primeiro pede confirmação e desiste sozinho depois de alguns segundos.
@@ -243,7 +413,7 @@ function deleteButton(item) {
 async function deleteAnalysis(videoId) {
   errorBox.hidden = true;
   try {
-    const response = await fetch(`/api/analyses/${videoId}`, { method: "DELETE" });
+    const response = await api(`/api/analyses/${videoId}`, { method: "DELETE" });
     if (!response.ok && response.status !== 404) {
       const body = await response.json().catch(() => ({}));
       throw new Error(typeof body.detail === "string" ? body.detail : "Não consegui apagar.");
@@ -254,7 +424,7 @@ async function deleteAnalysis(videoId) {
       reportBox.hidden = true;
       noticeBox.hidden = true;
     }
-    await loadHistory();
+    await refreshHistory();
   } catch (error) {
     showError(error.message);
   }
@@ -280,10 +450,10 @@ async function analyze(event) {
   statusBox.textContent = "Enviando...";
   statusBox.hidden = false;
   try {
-    const response = await fetch("/api/analyses", {
+    const response = await api("/api/analyses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: urlInput.value }),
+      body: JSON.stringify({ url: urlInput.value, extract_now: extractNow.checked }),
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
@@ -294,8 +464,16 @@ async function analyze(event) {
       noticeBox.textContent = `Você já analisou esta música em ${dateText(created.analyzed_at)}.`;
       noticeBox.hidden = false;
     }
-    await loadReport(created.video_id);
-    await loadHistory();
+    if (!created.already_analyzed && !extractNow.checked) {
+      // Enviado ao worker (202): não espera; a lista se atualiza quando ficar pronto.
+      statusBox.hidden = true;
+      noticeBox.textContent = BACKGROUND_TEXT;
+      noticeBox.hidden = false;
+      urlInput.value = "";
+    } else {
+      await loadReport(created.video_id);
+    }
+    await refreshHistory();
   } catch (error) {
     showError(error.message);
   } finally {
@@ -310,7 +488,18 @@ function onCeilingChange() {
   }
 }
 
+extractNow.checked = readSavedExtractNow();
+showExtractLabel();
+extractNow.addEventListener("change", () => {
+  saveExtractNow(extractNow.checked);
+  showExtractLabel();
+});
 ceilingSelect.addEventListener("change", onCeilingChange);
 form.addEventListener("submit", analyze);
 loadCeilings().catch(() => showError("Não consegui carregar a lista de tetos."));
-loadHistory().catch(() => showError("Não consegui carregar a lista de músicas."));
+refreshHistory({ manual: true });
+historyRefresh.addEventListener("click", () => refreshHistory({ manual: true }));
+setInterval(pollHistory, HISTORY_POLL_MS);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && !appBox.hidden) refreshHistory({ manual: true });
+});

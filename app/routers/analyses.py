@@ -3,12 +3,22 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import worker
 from app.domain.errors import InvalidUrlError
+from app.domain.features import ALGO_VERSION
 from app.domain.notes import DEFAULT_CEILING_MIDI, ceiling_options
-from app.domain.pitch import ALGO_VERSION
 from app.domain.schemas import (
     AnalysisCreated,
     AnalysisOut,
@@ -17,17 +27,18 @@ from app.domain.schemas import (
     CeilingOut,
     CeilingsOut,
 )
-from app.services import jobs, store
+from app.services import jobs, ratelimit, store
+from app.services.auth import require_passphrase
 from app.services.report import build_report, note_out
 from app.services.youtube import parse_video_id
 
-router = APIRouter(prefix="/api", tags=["analyses"])
+router = APIRouter(prefix="/api", tags=["analyses"], dependencies=[Depends(require_passphrase)])
 
 Session = Annotated[AsyncSession, Depends(store.get_session)]
 
 
 def _utc(moment: datetime) -> datetime:
-    """O SQLite devolve datas sem fuso; elas são sempre UTC."""
+    """As datas vêm do banco sem fuso; elas são sempre UTC."""
     return moment.replace(tzinfo=UTC)
 
 
@@ -47,13 +58,20 @@ def list_ceilings() -> CeilingsOut:
     summary="Pede a análise de uma música",
     description=(
         "Recebe o link do YouTube. Se o vídeo já foi analisado, responde 200 com "
-        "`already_analyzed` e a data; senão responde 202 e analisa em segundo plano."
+        "`already_analyzed` e a data; senão responde 202 e enfileira para o worker. "
+        "Com `extract_now`, a API tenta extrair em segundo plano por até 60 s (pelo proxy "
+        "`PROXY_*`, se configurado) e, se não der, o job fica na fila para o worker. "
+        "Responde 429 se o IP passou do limite de novos pedidos por hora."
     ),
 )
 async def create_analysis(
-    body: AnalysisRequest, background: BackgroundTasks, response: Response, session: Session
+    body: AnalysisRequest,
+    request: Request,
+    response: Response,
+    session: Session,
+    background: BackgroundTasks,
 ) -> AnalysisCreated:
-    """Identifica o vídeo, reaproveita a análise guardada ou agenda uma nova."""
+    """Identifica o vídeo, reaproveita a análise guardada ou enfileira uma nova."""
     try:
         video_id = parse_video_id(body.url)
     except InvalidUrlError as error:
@@ -63,8 +81,18 @@ async def create_analysis(
         return AnalysisCreated(
             video_id=video_id, already_analyzed=True, analyzed_at=_utc(row.created_at)
         )
-    if jobs.start(video_id):
-        background.add_task(jobs.run, video_id)
+    progress = await jobs.get(session, video_id)
+    if progress is None or progress.status == "error":  # só pedido novo conta no limite
+        client = ratelimit.client_ip(request)
+        if ratelimit.exceeded(client):
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "Limite de pedidos por hora atingido, tente mais tarde.",
+            )
+        if await jobs.start(session, video_id):
+            ratelimit.record(client)
+            if body.extract_now:
+                background.add_task(worker.extract_in_api, video_id)
     response.status_code = status.HTTP_202_ACCEPTED
     return AnalysisCreated(video_id=video_id, already_analyzed=False)
 
@@ -92,8 +120,8 @@ async def list_analyses(session: Session) -> list[AnalysisSummary]:
     "/analyses/{video_id}",
     summary="Consulta o relatório de uma música",
     description=(
-        "Devolve o status (baixando, analisando, pronto ou erro) e, se pronto, o relatório "
-        "calculado para o `ceiling_midi` pedido, sem baixar o áudio de novo."
+        "Devolve o status (na fila, baixando, analisando, pronto ou erro) e, se pronto, o "
+        "relatório calculado para o `ceiling_midi` pedido, sem baixar o áudio de novo."
     ),
 )
 async def get_analysis(
@@ -102,7 +130,7 @@ async def get_analysis(
     ceiling_midi: Annotated[int, Query(ge=48, le=72)] = DEFAULT_CEILING_MIDI,
 ) -> AnalysisOut:
     """Estado da análise; 404 se o vídeo nunca foi analisado."""
-    progress = jobs.get(video_id)
+    progress = await jobs.get(session, video_id)
     row = await store.find(session, video_id)
     # Erro de uma reanálise não esconde o registro guardado, que continua legível.
     if progress is not None and not (progress.status == "error" and row is not None):
@@ -123,8 +151,8 @@ async def get_analysis(
     ),
 )
 async def delete_analysis(video_id: str, session: Session) -> None:
-    """Apaga a análise guardada e o andamento em memória do vídeo."""
-    if not jobs.forget(video_id):
+    """Apaga a análise guardada e a falha registrada do vídeo."""
+    if not await jobs.forget(session, video_id):
         raise HTTPException(status.HTTP_409_CONFLICT, "A música está sendo analisada agora.")
     if not await store.remove(session, video_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Análise não encontrada.")

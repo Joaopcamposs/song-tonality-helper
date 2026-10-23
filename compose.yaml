@@ -1,25 +1,56 @@
-# Publica o app em casa: a API e o Cloudflare Tunnel, que expõe o app na internet sem abrir portas.
-# Uso: copie .env.example para .env, preencha TUNNEL_TOKEN e rode `docker compose up -d --build`.
+# Roda em casa o Postgres, a API e o worker que analisa. Uso: `docker compose up -d --build`.
 services:
+  # Postgres do app (desenvolvimento e casa). Em produção na nuvem o DATABASE_URL vem do Neon.
+  # A porta só abre para a máquina local, para `make run`/`make test` falarem com ele.
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev}
+      POSTGRES_DB: song_tonality
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - song-tonality-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d song_tonality"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
   app:
     build: .
     restart: unless-stopped
-    # Só a máquina local acessa direto; o acesso público passa pelo túnel.
+    # Só a máquina local acessa direto.
     ports:
       - "127.0.0.1:8007:8000"
-    # O banco SQLite fica no volume, para as análises sobreviverem a recriações.
-    volumes:
-      - song-tonality-data:/srv/data
-
-  tunnel:
-    image: cloudflare/cloudflared:latest
-    restart: unless-stopped
-    # O túnel aponta o subdomínio para http://app:8000, configurado no painel da Cloudflare.
-    command: tunnel --no-autoupdate run
+    # Palavra secreta da API (vazia = sem proteção); o banco é sempre o Postgres deste compose.
     environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?defina TUNNEL_TOKEN no .env}
+      APP_PASSPHRASE: ${APP_PASSPHRASE:-}
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-dev}@db:5432/song_tonality
     depends_on:
-      - app
+      db:
+        condition: service_healthy
+
+  # Worker: pega os jobs pendentes do banco, baixa o áudio e analisa. Usa a mesma imagem da API.
+  worker:
+    build: .
+    restart: unless-stopped
+    command: python -m app.worker
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-dev}@db:5432/song_tonality
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Worker contra o banco remoto (API na nuvem): DATABASE_URL e PROXY_* vêm do .env, sem usar o db
+  # daqui. Só sobe com o perfil `remote` (`make worker-remote`), nunca no `docker compose up` comum.
+  worker-remote:
+    build: .
+    restart: unless-stopped
+    command: python -m app.worker
+    profiles: ["remote"]
+    env_file: .env
 
 volumes:
-  song-tonality-data:
+  song-tonality-db:

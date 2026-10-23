@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class NoteOut(BaseModel):
@@ -47,6 +47,14 @@ class AnalysisRequest(BaseModel):
     """Pedido de análise: link do YouTube. O teto só entra na consulta do relatório."""
 
     url: str
+    extract_now: bool = Field(
+        default=False,
+        description=(
+            "False (padrão): só enfileira para o worker. True: a própria API tenta extrair "
+            "em segundo plano por até 60 s (pelo proxy `PROXY_*`, se configurado); se não "
+            "terminar, o job volta à fila para o worker."
+        ),
+    )
 
 
 class AnalysisCreated(BaseModel):
@@ -61,7 +69,7 @@ class AnalysisOut(BaseModel):
     """Estado de uma análise; o relatório vem quando o status é `done`."""
 
     video_id: str
-    status: Literal["downloading", "analyzing", "done", "error"]
+    status: Literal["pending", "downloading", "analyzing", "done", "error"]
     error: str | None = None
     title: str | None = None
     report: Report | None = None

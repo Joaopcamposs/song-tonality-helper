@@ -1,86 +1,139 @@
-"""Andamento das análises em memória e execução em segundo plano."""
+"""Andamento das análises guardado no banco: fila e reivindicação (a execução fica no worker)."""
 
-import asyncio
-import logging
-import tempfile
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Literal
+from datetime import UTC, datetime, timedelta
 
-from app.domain.errors import DomainError
-from app.domain.pitch import ALGO_VERSION, AudioFeatures, analyze_audio
-from app.services import store
-from app.services.youtube import DownloadedAudio, download_audio
+from sqlalchemy import CursorResult, and_, delete, or_, select, update
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
+from app.services.store import Job, JobStatus
 
 MAX_JOBS = 50
+STALE_SECONDS = 300  # job em curso sem sinal há tanto tempo foi abandonado (ex.: a API caiu)
 
 
 @dataclass
 class Progress:
     """Andamento de uma análise ainda não gravada: em curso ou que falhou."""
 
-    status: Literal["downloading", "analyzing", "error"]
+    status: JobStatus
     error: str | None = None
 
 
-# Dicionário preserva a ordem de inserção: o primeiro item é o mais antigo.
-_progress: dict[str, Progress] = {}
+def now() -> datetime:
+    """Momento atual em UTC, sem fuso, como o banco guarda."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
-def start(video_id: str) -> bool:
-    """Marca o vídeo como em andamento; devolve False se já estava em análise."""
-    current = _progress.get(video_id)
-    if current is not None and current.status != "error":
-        return False
-    _progress.pop(video_id, None)
-    _progress[video_id] = Progress("downloading")
-    while len(_progress) > MAX_JOBS:
-        # Só descarta falhas antigas: análise em curso nunca some do andamento.
-        stale = next((key for key, p in _progress.items() if p.status == "error"), None)
-        if stale is None:
-            break
-        del _progress[stale]
-    return True
-
-
-def forget(video_id: str) -> bool:
-    """Esquece a falha guardada do vídeo; devolve False se há análise em curso."""
-    current = _progress.get(video_id)
-    if current is not None and current.status != "error":
-        return False
-    _progress.pop(video_id, None)
-    return True
-
-
-def get(video_id: str) -> Progress | None:
-    """Andamento do vídeo, se estiver em análise ou tiver falhado."""
-    return _progress.get(video_id)
-
-
-def _analyze(video_id: str) -> tuple[DownloadedAudio, AudioFeatures]:
-    """Baixa e analisa o áudio (bloqueante); o arquivo temporário é sempre apagado."""
-    with tempfile.TemporaryDirectory() as tmp:
-        audio = download_audio(video_id, Path(tmp))
-        _progress[video_id].status = "analyzing"
-        return audio, analyze_audio(audio.path)
-
-
-async def run(video_id: str) -> None:
-    """Executa a análise e grava o resultado; em falha, guarda só a mensagem de erro."""
+async def start(session: AsyncSession, video_id: str) -> bool:
+    """Enfileira o vídeo como `pending`; devolve False se já havia job em curso."""
+    # O UPDATE condicional reaproveita só a linha de falha, mesmo com pedidos simultâneos.
+    reused = await session.execute(
+        update(Job)
+        .where(Job.video_id == video_id, Job.status == "error")
+        .values(status="pending", error=None, updated_at=now())
+    )
+    assert isinstance(reused, CursorResult)
+    if reused.rowcount == 0:
+        session.add(Job(video_id=video_id, status="pending", error=None, updated_at=now()))
     try:
-        async with store.session() as session:
-            row = await store.find(session, video_id)
-        if row is not None and row.algo_version == ALGO_VERSION:  # outro pedido já terminou
-            del _progress[video_id]
-            return
-        audio, features = await asyncio.to_thread(_analyze, video_id)
-        async with store.session() as session:
-            await store.save(session, video_id, audio.title, audio.duration_seconds, features)
-        del _progress[video_id]
-    except DomainError as error:
-        _progress[video_id] = Progress("error", error.message)
-    except Exception:
-        logger.exception("Falha inesperada na análise %s", video_id)
-        _progress[video_id] = Progress("error", "Erro inesperado ao analisar a música.")
+        await session.commit()
+    except IntegrityError:  # outro pedido criou o job antes
+        await session.rollback()
+        return False
+    await _prune(session)
+    return True
+
+
+async def _prune(session: AsyncSession) -> None:
+    """Mantém no máximo `MAX_JOBS` falhas, descartando as mais antigas; job em curso fica."""
+    stale = await session.scalars(
+        select(Job.video_id)
+        .where(Job.status == "error")
+        .order_by(Job.updated_at.desc())
+        .offset(MAX_JOBS)
+    )
+    ids = list(stale)
+    if ids:
+        await session.execute(delete(Job).where(Job.video_id.in_(ids)))
+        await session.commit()
+
+
+async def fail(session: AsyncSession, video_id: str, message: str) -> None:
+    """Marca o job como falho, guardando a mensagem para a tela."""
+    await session.execute(
+        update(Job)
+        .where(Job.video_id == video_id)
+        .values(status="error", error=message, updated_at=now())
+    )
+    await session.commit()
+    await _prune(session)
+
+
+async def forget(session: AsyncSession, video_id: str) -> bool:
+    """Esquece a falha guardada do vídeo; devolve False se há análise em curso."""
+    job = await session.get(Job, video_id)
+    if job is None:
+        return True
+    if job.status != "error":
+        return False
+    await session.delete(job)
+    await session.commit()
+    return True
+
+
+async def get(session: AsyncSession, video_id: str) -> Progress | None:
+    """Andamento do vídeo, se estiver em análise ou tiver falhado."""
+    job = await session.get(Job, video_id)
+    return None if job is None else Progress(job.status, job.error)
+
+
+async def claim(session: AsyncSession, video_id: str | None = None) -> str | None:
+    """Reivindica um job `pending` ou abandonado, passando-o a `downloading`; None se não há.
+
+    Abandonado é o job em `downloading`/`analyzing` sem atualização há `STALE_SECONDS`. Sem
+    `video_id`, pega o mais antigo da fila; com ele, só aquele job (None se já foi pego).
+    """
+    available = or_(
+        Job.status == "pending",
+        and_(
+            Job.status.in_(("downloading", "analyzing")),
+            Job.updated_at < now() - timedelta(seconds=STALE_SECONDS),
+        ),
+    )
+    target = select(Job.video_id).where(available)
+    if video_id is not None:
+        target = target.where(Job.video_id == video_id)
+    oldest = target.order_by(Job.updated_at).limit(1).with_for_update(skip_locked=True)
+    # A condição repetida no UPDATE garante que só um ganha cada job.
+    claimed = await session.scalar(
+        update(Job)
+        .where(Job.video_id == oldest.scalar_subquery(), available)
+        .values(status="downloading", updated_at=now())
+        .returning(Job.video_id)
+    )
+    await session.commit()
+    return claimed
+
+
+async def requeue(session: AsyncSession, video_id: str) -> None:
+    """Devolve o job em curso para `pending`, sem marcar erro, para outro executor assumir."""
+    await session.execute(
+        update(Job)
+        .where(Job.video_id == video_id, Job.status.in_(("downloading", "analyzing")))
+        .values(status="pending", updated_at=now())
+    )
+    await session.commit()
+
+
+async def requeue_orphans(session: AsyncSession) -> int:
+    """Recoloca na fila os jobs em curso de um worker que caiu; devolve quantos eram."""
+    result = await session.execute(
+        update(Job)
+        .where(Job.status.in_(("downloading", "analyzing")))
+        .values(status="pending", updated_at=now())
+    )
+    assert isinstance(result, CursorResult)
+    await session.commit()
+    return result.rowcount

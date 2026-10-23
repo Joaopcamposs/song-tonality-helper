@@ -4,21 +4,36 @@ Ferramenta pessoal de estudo musical: cole o link de uma música do YouTube, esc
 
 ## Como usar
 
-Requisitos: [uv](https://docs.astral.sh/uv/) e `ffmpeg` (`brew install ffmpeg`).
+Requisitos: [uv](https://docs.astral.sh/uv/), `ffmpeg` (`brew install ffmpeg`) e Docker (para o Postgres local).
 
 ```bash
 uv sync
-make run          # http://localhost:8007
+make db           # Postgres do compose (porta 5432); `run`, `worker` e `test` já o sobem
+make run          # API em http://localhost:8007
+make worker       # em outro terminal: processa a fila de análises
 ```
 
 1. Cole o link do YouTube (um vídeo de até 10 minutos).
 2. Escolha o seu tom teto na lista (o valor fica salvo no navegador).
-3. Clique em Analisar e leia o relatório: nota mais aguda, tom detectado, deslocamento em semitons, novo tom, grau da nota, trechos em que ela aparece e o ranking das notas.
+3. Escolha o método de extração (switch) e clique em Analisar. Em "Enviar para o worker" (padrão) a tela avisa que a música é processada em segundo plano e a lista a traz quando ficar pronta; em "Extrair agora" a tela aguarda o relatório. O relatório traz a nota mais aguda, o tom detectado, deslocamento em semitons, novo tom, grau da nota, trechos em que ela aparece e o ranking das notas.
 4. A análise fica guardada: colar de novo o mesmo vídeo (em qualquer forma de link) avisa que já foi analisado e mostra o resultado na hora. A lista "Músicas já analisadas" reabre qualquer uma, e trocar o teto recalcula o relatório sem baixar nada. O botão "Apagar" (com confirmação) tira a música da lista.
 
-As análises ficam num SQLite em `data/analyses.db` (mude com a variável `DATABASE_PATH`; apague o arquivo para recomeçar). No Docker o banco fica no volume `song-tonality-data`.
+As análises e o andamento dos jobs ficam num Postgres escolhido por `DATABASE_URL` (obrigatória, `postgresql+asyncpg://usuario:senha@host:5432/banco`). Localmente, `make db` sobe o Postgres do compose (banco `song_tonality`, senha `dev`, só em `127.0.0.1:5432`) e `make run`/`make worker` já usam essa URL; exporte `DATABASE_URL` para apontar para outro banco. Em produção na nuvem, `DATABASE_URL` vem do Neon (use `ssl=require` no lugar de `sslmode=require`); no compose, defina-a no `.env` para sobrescrever o serviço `db`. As tabelas ficam no schema próprio `song-tonality-helper`, criado automaticamente, o que permite dividir o banco com outros apps. Os testes usam o banco `song_tonality_test` (criado por `make db`; `TEST_DATABASE_URL` sobrescreve) porque a fixture apaga e recria o schema a cada teste.
 
-Com Docker: `make up` (mesma porta) e `make down`.
+Por padrão a API só enfileira o pedido (status "na fila"); quem baixa e analisa é o worker (`python -m app.worker`, ou `make worker`). Sem o worker rodando, as análises ficam pendentes (a tela avisa "Está demorando: o worker pode estar desligado." após 5 minutos). Um job que ficou em "baixando"/"analisando" por mais de 5 minutos (ex.: a API foi reciclada no meio da extração) é reivindicado de novo pelo worker. `make worker-remote` sobe, em segundo plano no Docker (perfil `remote` do compose), um worker contra o banco remoto do `.env` (`DATABASE_URL` e `PROXY_*`); `make worker-remote-logs` acompanha o log e `make worker-remote-down` o derruba. Os serviços `app` e `worker` do compose usam sempre o Postgres do próprio compose e não leem `DATABASE_URL` do `.env`.
+
+| Variável | Quem usa | Padrão |
+| --- | --- | --- |
+| `DATABASE_URL` | API e worker (o mesmo banco); obrigatória | nenhum (no `make`/compose, o Postgres local) |
+| `PROXY_USERNAME`, `PROXY_PASSWORD` | API: experimento de proxy, veja abaixo; segredos | vazias (desligado) |
+| `PROXY_HOST`, `PROXY_COUNTRY`, `PROXY_SESSION_MINUTES` | API: opções do proxy, veja abaixo | veja abaixo |
+| `WORKER_POLL_SECONDS` | worker: intervalo entre consultas à fila | `5` |
+| `APP_PASSPHRASE` | API: palavra secreta; se definida, toda rota `/api` (menos `/api/health`) exige o cabeçalho `X-App-Passphrase` e a tela pede a palavra (guardada no `localStorage`); 10 erros por hora por IP levam a 429. Vazia ou ausente: sem proteção. Use só ASCII (sem acentos): o cabeçalho HTTP é latin-1. O front estático continua público | vazia |
+| `MAX_REQUESTS_PER_HOUR` | API: novos pedidos por IP por hora (429 ao exceder; reaproveitar análise guardada ou job em curso não conta) | `20` |
+
+API na nuvem + worker em casa: aponte `DATABASE_URL` dos dois para o mesmo Postgres (ex.: Neon). Na nuvem rode só a API; em casa, só o worker (`docker compose up -d --build worker` ou `make worker`), já que o YouTube costuma bloquear IPs de nuvem. O worker só faz conexões de saída. Rode um único worker por banco: ao subir, ele devolve à fila os jobs que ficaram em andamento. Ctrl+C ou SIGTERM encerram depois do job atual.
+
+Com Docker: `make up` sobe tudo pelo compose (Postgres, API e worker), `make build-up` reconstruindo a imagem e `make down` derruba tudo (o volume do banco fica).
 
 ### API
 
@@ -46,15 +61,33 @@ Resultado de referência (aceite): "Dois Passarinhos" (Alan e Aladim), teto F#4 
 
 ---
 
-## Publicar em casa
+## Rodar em casa
 
-O app roda em casa (o YouTube costuma bloquear downloads de IPs de nuvem) e vai para a internet por um Cloudflare Tunnel, sem abrir portas no roteador.
+`docker compose up -d --build` sobe o Postgres, a API (em `127.0.0.1:8007`) e o worker. Para publicar na internet, veja a seção seguinte.
 
-1. No painel da Cloudflare (Zero Trust > Networks > Tunnels), crie um túnel e copie o token.
-2. No túnel, adicione um *public hostname* (ex.: `song.seudominio.com.br`) com serviço `http://app:8000`.
-3. Copie `.env.example` para `.env` e cole o token em `TUNNEL_TOKEN`.
-4. Suba tudo: `docker compose up -d --build`.
-5. Como o app não tem login, proteja o subdomínio em Zero Trust > Access > Applications, liberando só o seu e-mail.
+## Publicar no FastAPI Cloud
+
+A API e o front podem ficar no FastAPI Cloud (`[tool.fastapi]` no `pyproject.toml` aponta o entrypoint), com o worker rodando em casa (`make worker` ou o serviço `worker` do compose) contra o mesmo Postgres (Neon).
+
+1. `uv run fastapi login` e `uv run fastapi deploy` na primeira vez (cria o app e o `.fastapicloud/`, que não vai para o git). Depois, `make deploy`.
+2. No painel do app, defina as variáveis `DATABASE_URL` (`postgresql+asyncpg://...` do Neon) e `APP_PASSPHRASE` (ASCII).
+3. O worker em casa usa o mesmo `DATABASE_URL`.
+
+### Extrair agora, pela API (`extract_now`)
+
+Na tela, o switch "Método de extração" (desligado = "Enviar para o worker (processa em segundo plano)", o padrão; ligado = "Extrair agora (até 60 s; se não der, vai para o worker)"; a escolha fica no `localStorage`) vira o campo `extract_now` do `POST /api/analyses`. Desmarcado, a API nunca baixa: só enfileira. Marcado, depois de criar o job a API tenta baixar e analisar a música em segundo plano, por até 60 s no total (`EXTRACT_TIMEOUT_SECONDS`); a resposta continua sendo o 202 imediato. Se o prazo estourar ou o download falhar (bloqueio, proxy fora, rede), o job volta para "na fila" sem erro e o worker em casa assume; erros de análise (ex.: sem melodia) viram erro normalmente. O yt-dlp também usa `socket_timeout` de 20 s. Se `PROXY_USERNAME` e `PROXY_PASSWORD` estiverem definidas, a extração sai pelo proxy; senão, direto. O log diz se cada job foi resolvido "via proxy" ou "via worker".
+
+| Variável | Padrão | O que faz |
+|---|---|---|
+| `PROXY_USERNAME`, `PROXY_PASSWORD` | vazio | proxy residencial (formato Oxylabs: o usuário vira `customer-<user>-cc-<país>`). Sem eles o download sai direto. Aqui só o download do yt-dlp usa |
+| `PROXY_HOST` | `pr.oxylabs.io:7777` | endereço do proxy |
+| `PROXY_COUNTRY` | vazio | país de saída (ex.: `br`) |
+| `PROXY_SESSION_MINUTES` | vazio | vazio: IP novo a cada request (rotativo); número: IP fixo por esse tempo (sticky) |
+
+- O proxy precisa ser **residencial e rotativo**: o YouTube bloqueia IPs de nuvem e de datacenter.
+- Proxies residenciais costumam cobrar por tráfego (GB), e cada tentativa baixa o áudio do vídeo, então acompanhe o custo.
+- Usuário e senha são segredo: defina-os só nas variáveis do app e nunca a coloque em log nem no git. O `ffmpeg` não precisa existir no sistema da nuvem: sem ele, usa-se o do pacote `imageio-ffmpeg`.
+- Não verificado com proxy real; só com testes que substituem o yt-dlp. Rodar o worker em casa continua necessário como fallback.
 
 ## Origem da ideia
 
