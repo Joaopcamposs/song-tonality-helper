@@ -1,5 +1,5 @@
 # Atalhos de desenvolvimento. Uso: make <alvo>.
-.PHONY: db run worker test ruff ty up down build-up
+.PHONY: db run worker test ruff ty up down build-up deploy
 
 # Postgres local do compose (porta 5432). Sobrescreva no ambiente para usar outro banco.
 export DATABASE_URL ?= postgresql+asyncpg://postgres:dev@localhost:5432/song_tonality
@@ -42,3 +42,7 @@ down:
 # Sobe tudo pelo compose, reconstruindo a imagem.
 build-up:
 	docker compose up -d --build
+
+# Publica a API no FastAPI Cloud (DATABASE_URL e APP_PASSPHRASE ficam nas variáveis do app na nuvem).
+deploy:
+	uv run fastapi deploy

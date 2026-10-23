@@ -3,7 +3,7 @@ name = "song-tonality-helper"
 version = "0.2.0"
 requires-python = ">=3.14,<3.15"
 dependencies = [
-    "fastapi",
+    "fastapi[standard]",
     "uvicorn[standard]",
     "yt-dlp",
     "librosa",
@@ -35,3 +35,6 @@ select = ["E", "F", "I", "UP", "B", "D1"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.fastapi]
+entrypoint = "app.main:app"
