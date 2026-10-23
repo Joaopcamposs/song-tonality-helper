@@ -144,9 +144,15 @@ async function api(url, options = {}) {
     const sent = passphrase;
     const headers = { ...options.headers };
     if (passphrase) headers[PASSPHRASE_HEADER] = passphrase;
-    const response = await fetch(url, { ...options, headers });
+    let response;
+    try {
+      response = await fetch(url, { ...options, headers });
+    } catch (error) {
+      unlock(); // sem rede: mostra o app com o erro, nunca uma tela vazia
+      throw error;
+    }
     if (response.status !== 401) {
-      if (response.ok) unlock();
+      unlock(); // qualquer resposta que não seja 401 mostra o app (erros aparecem nos avisos)
       return response;
     }
     if (passphrase !== sent) continue; // outra chamada já trocou a palavra: só reenvia
@@ -181,6 +187,7 @@ function signed(n) {
 
 async function loadCeilings() {
   const response = await api("/api/ceilings");
+  if (!response.ok) throw new Error("ceilings");
   const data = await response.json();
   const saved = Number(readSavedCeiling());
   const wanted = data.options.some((o) => o.midi === saved) ? saved : data.default_midi;
