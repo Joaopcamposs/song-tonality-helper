@@ -138,6 +138,6 @@ async def test_recent_downloading_job_is_not_claimed(monkeypatch):
     await _enqueue()
     async with store.session() as session:
         await jobs.claim(session)
-    await _age_job(jobs.STALE_SECONDS - 60)
+    await _age_job(jobs.STALE_SECONDS - 10)
     assert await worker.process_next() is False
     assert calls == []

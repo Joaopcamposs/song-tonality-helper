@@ -10,7 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.store import Job, JobStatus
 
 MAX_JOBS = 50
-STALE_SECONDS = 300  # job em curso sem sinal há tanto tempo foi abandonado (ex.: a API caiu)
+# Job em curso sem sinal há tanto tempo foi abandonado (ex.: a API caiu). Fica logo acima do prazo
+# de 60 s do extract_now, para não retomar uma extração ainda viva.
+STALE_SECONDS = 61
 
 
 @dataclass
