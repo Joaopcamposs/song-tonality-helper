@@ -15,12 +15,12 @@ make worker       # em outro terminal: processa a fila de análises
 
 1. Cole o link do YouTube (um vídeo de até 10 minutos).
 2. Escolha o seu tom teto na lista (o valor fica salvo no navegador).
-3. Clique em Analisar e leia o relatório: nota mais aguda, tom detectado, deslocamento em semitons, novo tom, grau da nota, trechos em que ela aparece e o ranking das notas.
+3. Escolha o método de extração (switch) e clique em Analisar. Em "Enviar para o worker" (padrão) a tela avisa que a música é processada em segundo plano e a lista a traz quando ficar pronta; em "Extrair agora" a tela aguarda o relatório. O relatório traz a nota mais aguda, o tom detectado, deslocamento em semitons, novo tom, grau da nota, trechos em que ela aparece e o ranking das notas.
 4. A análise fica guardada: colar de novo o mesmo vídeo (em qualquer forma de link) avisa que já foi analisado e mostra o resultado na hora. A lista "Músicas já analisadas" reabre qualquer uma, e trocar o teto recalcula o relatório sem baixar nada. O botão "Apagar" (com confirmação) tira a música da lista.
 
 As análises e o andamento dos jobs ficam num Postgres escolhido por `DATABASE_URL` (obrigatória, `postgresql+asyncpg://usuario:senha@host:5432/banco`). Localmente, `make db` sobe o Postgres do compose (banco `song_tonality`, senha `dev`, só em `127.0.0.1:5432`) e `make run`/`make worker` já usam essa URL; exporte `DATABASE_URL` para apontar para outro banco. Em produção na nuvem, `DATABASE_URL` vem do Neon (use `ssl=require` no lugar de `sslmode=require`); no compose, defina-a no `.env` para sobrescrever o serviço `db`. As tabelas ficam no schema próprio `song-tonality-helper`, criado automaticamente, o que permite dividir o banco com outros apps. Os testes usam o banco `song_tonality_test` (criado por `make db`; `TEST_DATABASE_URL` sobrescreve) porque a fixture apaga e recria o schema a cada teste.
 
-Por padrão a API só enfileira o pedido (status "na fila"); quem baixa e analisa é o worker (`python -m app.worker`, ou `make worker`). Sem o worker rodando, as análises ficam pendentes (a tela avisa "Está demorando: o worker pode estar desligado." após 5 minutos). Um job que ficou em "baixando"/"analisando" por mais de 5 minutos (ex.: a API foi reciclada no meio da extração) é reivindicado de novo pelo worker. `make worker-remote` roda o worker contra o banco remoto do `.env`.
+Por padrão a API só enfileira o pedido (status "na fila"); quem baixa e analisa é o worker (`python -m app.worker`, ou `make worker`). Sem o worker rodando, as análises ficam pendentes (a tela avisa "Está demorando: o worker pode estar desligado." após 5 minutos). Um job que ficou em "baixando"/"analisando" por mais de 5 minutos (ex.: a API foi reciclada no meio da extração) é reivindicado de novo pelo worker. `make worker-remote` sobe, em segundo plano no Docker (perfil `remote` do compose), um worker contra o banco remoto do `.env` (`DATABASE_URL` e `PROXY_*`); `make worker-remote-logs` acompanha o log e `make worker-remote-down` o derruba. Os serviços `app` e `worker` do compose usam sempre o Postgres do próprio compose e não leem `DATABASE_URL` do `.env`.
 
 | Variável | Quem usa | Padrão |
 | --- | --- | --- |
@@ -31,9 +31,9 @@ Por padrão a API só enfileira o pedido (status "na fila"); quem baixa e analis
 | `APP_PASSPHRASE` | API: palavra secreta; se definida, toda rota `/api` (menos `/api/health`) exige o cabeçalho `X-App-Passphrase` e a tela pede a palavra (guardada no `localStorage`); 10 erros por hora por IP levam a 429. Vazia ou ausente: sem proteção. Use só ASCII (sem acentos): o cabeçalho HTTP é latin-1. O front estático continua público | vazia |
 | `MAX_REQUESTS_PER_HOUR` | API: novos pedidos por IP por hora (429 ao exceder; reaproveitar análise guardada ou job em curso não conta) | `20` |
 
-API na nuvem + worker em casa: aponte `DATABASE_URL` dos dois para o mesmo Postgres (ex.: Neon). Na nuvem rode só a API; em casa, só o worker (`docker compose up -d --build worker` ou `make worker`), já que o YouTube costuma bloquear IPs de nuvem. O worker só faz conexões de saída, sem túnel. Rode um único worker por banco: ao subir, ele devolve à fila os jobs que ficaram em andamento. Ctrl+C ou SIGTERM encerram depois do job atual.
+API na nuvem + worker em casa: aponte `DATABASE_URL` dos dois para o mesmo Postgres (ex.: Neon). Na nuvem rode só a API; em casa, só o worker (`docker compose up -d --build worker` ou `make worker`), já que o YouTube costuma bloquear IPs de nuvem. O worker só faz conexões de saída. Rode um único worker por banco: ao subir, ele devolve à fila os jobs que ficaram em andamento. Ctrl+C ou SIGTERM encerram depois do job atual.
 
-Com Docker: `make up` sobe tudo pelo compose (Postgres, API, worker e túnel), `make build-up` reconstruindo a imagem e `make down` derruba tudo (o volume do banco fica).
+Com Docker: `make up` sobe tudo pelo compose (Postgres, API e worker), `make build-up` reconstruindo a imagem e `make down` derruba tudo (o volume do banco fica).
 
 ### API
 
@@ -75,7 +75,7 @@ A API e o front podem ficar no FastAPI Cloud (`[tool.fastapi]` no `pyproject.tom
 
 ### Extrair agora, pela API (`extract_now`)
 
-Na tela, o switch "Extrair agora (até 60 s; se não der, vai para o worker)" (desmarcado = "Enviar para o worker", o padrão; a escolha fica no `localStorage`) vira o campo `extract_now` do `POST /api/analyses`. Desmarcado, a API nunca baixa: só enfileira. Marcado, depois de criar o job a API tenta baixar e analisar a música em segundo plano, por até 60 s no total (`EXTRACT_TIMEOUT_SECONDS`); a resposta continua sendo o 202 imediato. Se o prazo estourar ou o download falhar (bloqueio, proxy fora, rede), o job volta para "na fila" sem erro e o worker em casa assume; erros de análise (ex.: sem melodia) viram erro normalmente. O yt-dlp também usa `socket_timeout` de 20 s. Se `PROXY_USERNAME` e `PROXY_PASSWORD` estiverem definidas, a extração sai pelo proxy; senão, direto. O log diz se cada job foi resolvido "via proxy" ou "via worker".
+Na tela, o switch "Método de extração" (desligado = "Enviar para o worker (processa em segundo plano)", o padrão; ligado = "Extrair agora (até 60 s; se não der, vai para o worker)"; a escolha fica no `localStorage`) vira o campo `extract_now` do `POST /api/analyses`. Desmarcado, a API nunca baixa: só enfileira. Marcado, depois de criar o job a API tenta baixar e analisar a música em segundo plano, por até 60 s no total (`EXTRACT_TIMEOUT_SECONDS`); a resposta continua sendo o 202 imediato. Se o prazo estourar ou o download falhar (bloqueio, proxy fora, rede), o job volta para "na fila" sem erro e o worker em casa assume; erros de análise (ex.: sem melodia) viram erro normalmente. O yt-dlp também usa `socket_timeout` de 20 s. Se `PROXY_USERNAME` e `PROXY_PASSWORD` estiverem definidas, a extração sai pelo proxy; senão, direto. O log diz se cada job foi resolvido "via proxy" ou "via worker".
 
 | Variável | Padrão | O que faz |
 |---|---|---|
