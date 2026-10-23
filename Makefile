@@ -25,3 +25,6 @@ up:
 # Derruba o contêiner da API.
 down:
 	docker stop song-tonality-helper
+
+build-up:
+	docker compose up -d --build
