@@ -1,0 +1,25 @@
+# Publica o app em casa: a API e o Cloudflare Tunnel, que expõe o app na internet sem abrir portas.
+# Uso: copie .env.example para .env, preencha TUNNEL_TOKEN e rode `docker compose up -d --build`.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    # Só a máquina local acessa direto; o acesso público passa pelo túnel.
+    ports:
+      - "127.0.0.1:8001:8000"
+    # O banco SQLite fica no volume, para as análises sobreviverem a recriações.
+    volumes:
+      - song-tonality-data:/srv/data
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    # O túnel aponta o subdomínio para http://app:8000, configurado no painel da Cloudflare.
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?defina TUNNEL_TOKEN no .env}
+    depends_on:
+      - app
+
+volumes:
+  song-tonality-data:

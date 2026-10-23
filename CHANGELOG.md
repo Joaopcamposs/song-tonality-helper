@@ -2,6 +2,7 @@
 
 ## Não lançado
 
+- `compose.yaml` com a API e o Cloudflare Tunnel para publicar o app em casa (token em `.env`, modelo em `.env.example`).
 - Apagar uma música da lista (botão com confirmação na tela; `DELETE /api/analyses/{video_id}`, 204, 404 se não existe e 409 se está em análise).
 - Ajustes: o andamento em curso não é descartado ao passar de 50 análises; dois pedidos simultâneos não baixam o mesmo vídeo duas vezes; links `/live/` e `/embed/` são aceitos e links de canal/playlist têm mensagem própria; o acompanhamento na tela para ao trocar de música e tolera falha de rede passageira.
 - **Mudança na API e na tela:** a numeração do usuário (dó central = C3) saiu; notas e tetos usam só a padrão (dó central = C4). As notas da API e as opções de teto agora têm `midi` e `name`; a lista de teto vai de C3 a C5 (os mesmos números MIDI de antes, com teto padrão F#4).

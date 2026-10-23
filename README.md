@@ -46,6 +46,16 @@ Resultado de referência (aceite): "Dois Passarinhos" (Alan e Aladim), teto F#4 
 
 ---
 
+## Publicar em casa
+
+O app roda em casa (o YouTube costuma bloquear downloads de IPs de nuvem) e vai para a internet por um Cloudflare Tunnel, sem abrir portas no roteador.
+
+1. No painel da Cloudflare (Zero Trust > Networks > Tunnels), crie um túnel e copie o token.
+2. No túnel, adicione um *public hostname* (ex.: `song.seudominio.com.br`) com serviço `http://app:8000`.
+3. Copie `.env.example` para `.env` e cole o token em `TUNNEL_TOKEN`.
+4. Suba tudo: `docker compose up -d --build`.
+5. Como o app não tem login, proteja o subdomínio em Zero Trust > Access > Applications, liberando só o seu e-mail.
+
 ## Origem da ideia
 
 Principios:
