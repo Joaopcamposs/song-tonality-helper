@@ -18,10 +18,11 @@ from app.domain.schemas import (
     CeilingsOut,
 )
 from app.services import jobs, ratelimit, store
+from app.services.auth import require_passphrase
 from app.services.report import build_report, note_out
 from app.services.youtube import parse_video_id
 
-router = APIRouter(prefix="/api", tags=["analyses"])
+router = APIRouter(prefix="/api", tags=["analyses"], dependencies=[Depends(require_passphrase)])
 
 Session = Annotated[AsyncSession, Depends(store.get_session)]
 

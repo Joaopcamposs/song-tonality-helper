@@ -7,6 +7,9 @@ services:
     # Só a máquina local acessa direto; o acesso público passa pelo túnel.
     ports:
       - "127.0.0.1:8007:8000"
+    # Palavra secreta da API (vazia = sem proteção); defina no .env.
+    environment:
+      APP_PASSPHRASE: ${APP_PASSPHRASE:-}
     # O banco SQLite fica no volume, para as análises sobreviverem a recriações.
     volumes:
       - song-tonality-data:/srv/data

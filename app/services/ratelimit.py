@@ -1,4 +1,4 @@
-"""Limite de novos pedidos de análise por IP, em memória, numa janela de 1 hora."""
+"""Limites por IP (pedidos de análise e senhas erradas), em memória, numa janela de 1 hora."""
 
 import os
 import time
@@ -19,9 +19,11 @@ def _recent(key: str) -> deque[float]:
     return hits
 
 
-def exceeded(key: str) -> bool:
-    """Diz se o IP já gastou os `MAX_REQUESTS_PER_HOUR` pedidos (padrão 20) da janela."""
-    return len(_recent(key)) >= int(os.environ.get("MAX_REQUESTS_PER_HOUR", "20"))
+def exceeded(key: str, limit: int | None = None) -> bool:
+    """Diz se a chave já gastou `limit` registros da janela (padrão `MAX_REQUESTS_PER_HOUR`, 20)."""
+    if limit is None:
+        limit = int(os.environ.get("MAX_REQUESTS_PER_HOUR", "20"))
+    return len(_recent(key)) >= limit
 
 
 def record(key: str) -> None:

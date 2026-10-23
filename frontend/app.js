@@ -2,6 +2,8 @@
 // Todo dado vindo da API entra na página por textContent, nunca por innerHTML.
 
 const CEILING_KEY = "ceilingMidi";
+const PASSPHRASE_KEY = "passphrase";
+const PASSPHRASE_HEADER = "X-App-Passphrase";
 const POLL_MS = 2000;
 const CONFIRM_MS = 4000;
 const FETCH_ATTEMPTS = 3;
@@ -40,6 +42,69 @@ function saveCeiling(midi) {
   }
 }
 
+function readSavedPassphrase() {
+  try {
+    return localStorage.getItem(PASSPHRASE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function savePassphrase(value) {
+  try {
+    if (value) localStorage.setItem(PASSPHRASE_KEY, value);
+    else localStorage.removeItem(PASSPHRASE_KEY);
+  } catch {
+    // Sem armazenamento: a palavra só vale até fechar a página.
+  }
+}
+
+let passphrase = readSavedPassphrase();
+let passphraseAsk = null; // pedido de palavra em andamento, compartilhado pelas chamadas simultâneas
+
+// Mostra o campo da palavra secreta e devolve o que a pessoa digitar.
+function askPassphrase(message) {
+  if (passphraseAsk) return passphraseAsk;
+  passphraseAsk = new Promise((resolve) => {
+    const input = el("input");
+    input.type = "password";
+    input.required = true;
+    input.autocomplete = "current-password";
+    const label = el("label", message);
+    label.append(input);
+    const button = el("button", "Entrar", "primary big");
+    button.type = "submit";
+    const panel = el("form", undefined, "panel stack");
+    panel.append(label, button);
+    panel.addEventListener("submit", (event) => {
+      event.preventDefault();
+      panel.remove();
+      passphraseAsk = null;
+      resolve(input.value);
+    });
+    document.querySelector("main").prepend(panel);
+    input.focus();
+  });
+  return passphraseAsk;
+}
+
+// fetch da API: manda a palavra secreta guardada e, se a API recusar (401), pede de novo e reenvia.
+async function api(url, options = {}) {
+  for (;;) {
+    const sent = passphrase;
+    const headers = { ...options.headers };
+    if (passphrase) headers[PASSPHRASE_HEADER] = passphrase;
+    const response = await fetch(url, { ...options, headers });
+    if (response.status !== 401) return response;
+    if (passphrase !== sent) continue; // outra chamada já trocou a palavra: só reenvia
+    const message = passphrase ? "Palavra secreta recusada. Digite de novo:" : "Digite a palavra secreta:";
+    passphrase = "";
+    savePassphrase("");
+    passphrase = await askPassphrase(message);
+    savePassphrase(passphrase);
+  }
+}
+
 function el(tag, text, className) {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
@@ -62,7 +127,7 @@ function signed(n) {
 }
 
 async function loadCeilings() {
-  const response = await fetch("/api/ceilings");
+  const response = await api("/api/ceilings");
   const data = await response.json();
   const saved = Number(readSavedCeiling());
   const wanted = data.options.some((o) => o.midi === saved) ? saved : data.default_midi;
@@ -165,7 +230,7 @@ function wait(ms) {
 async function fetchWithRetry(url) {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await fetch(url);
+      return await api(url);
     } catch (error) {
       if (attempt === FETCH_ATTEMPTS) throw error;
       await wait(POLL_MS);
@@ -199,7 +264,7 @@ async function loadReport(videoId, run = ++activeRun) {
 }
 
 async function loadHistory() {
-  const response = await fetch("/api/analyses");
+  const response = await api("/api/analyses");
   const items = await response.json();
   historyList.replaceChildren();
   if (items.length === 0) {
@@ -244,7 +309,7 @@ function deleteButton(item) {
 async function deleteAnalysis(videoId) {
   errorBox.hidden = true;
   try {
-    const response = await fetch(`/api/analyses/${videoId}`, { method: "DELETE" });
+    const response = await api(`/api/analyses/${videoId}`, { method: "DELETE" });
     if (!response.ok && response.status !== 404) {
       const body = await response.json().catch(() => ({}));
       throw new Error(typeof body.detail === "string" ? body.detail : "Não consegui apagar.");
@@ -281,7 +346,7 @@ async function analyze(event) {
   statusBox.textContent = "Enviando...";
   statusBox.hidden = false;
   try {
-    const response = await fetch("/api/analyses", {
+    const response = await api("/api/analyses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url: urlInput.value }),
