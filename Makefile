@@ -1,5 +1,5 @@
 # Atalhos de desenvolvimento. Uso: make <alvo>.
-.PHONY: db run worker test ruff ty up down build-up deploy
+.PHONY: db run worker worker-remote test ruff ty up down build-up deploy
 
 # Postgres local do compose (porta 5432). Sobrescreva no ambiente para usar outro banco.
 export DATABASE_URL ?= postgresql+asyncpg://postgres:dev@localhost:5432/song_tonality
@@ -31,6 +31,12 @@ ruff:
 # Checagem de tipos.
 ty:
 	$(UV_RUN) ty check app tests
+
+# Sobe só o worker contra o banco remoto (Supabase): DATABASE_URL e PROXY_* vêm do .env.
+# `env -u` tira o padrão local exportado acima, que senão teria precedência sobre o .env.
+worker-remote:
+	@test -f .env || { echo "Crie o .env com DATABASE_URL=<banco remoto>"; exit 1; }
+	env -u DATABASE_URL -u TEST_DATABASE_URL $(UV_RUN) --env-file .env python -m app.worker
 
 # Sobe tudo pelo compose (db, API, worker e túnel) sem reconstruir a imagem.
 up:

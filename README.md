@@ -20,7 +20,7 @@ make worker       # em outro terminal: processa a fila de análises
 
 As análises e o andamento dos jobs ficam num Postgres escolhido por `DATABASE_URL` (obrigatória, `postgresql+asyncpg://usuario:senha@host:5432/banco`). Localmente, `make db` sobe o Postgres do compose (banco `song_tonality`, senha `dev`, só em `127.0.0.1:5432`) e `make run`/`make worker` já usam essa URL; exporte `DATABASE_URL` para apontar para outro banco. Em produção na nuvem, `DATABASE_URL` vem do Neon (use `ssl=require` no lugar de `sslmode=require`); no compose, defina-a no `.env` para sobrescrever o serviço `db`. As tabelas ficam no schema próprio `song-tonality-helper`, criado automaticamente, o que permite dividir o banco com outros apps. Os testes usam o banco `song_tonality_test` (criado por `make db`; `TEST_DATABASE_URL` sobrescreve) porque a fixture apaga e recria o schema a cada teste.
 
-A API só enfileira o pedido (status "na fila"); quem baixa e analisa é o worker (`python -m app.worker`, ou `make worker`). Sem o worker rodando, as análises ficam pendentes.
+Por padrão a API só enfileira o pedido (status "na fila"); quem baixa e analisa é o worker (`python -m app.worker`, ou `make worker`). Sem o worker rodando, as análises ficam pendentes (a tela avisa "Está demorando: o worker pode estar desligado." após 5 minutos). Um job que ficou em "baixando"/"analisando" por mais de 5 minutos (ex.: a API foi reciclada no meio da extração) é reivindicado de novo pelo worker. `make worker-remote` roda o worker contra o banco remoto do `.env`.
 
 | Variável | Quem usa | Padrão |
 | --- | --- | --- |
@@ -79,9 +79,9 @@ A API e o front podem ficar no FastAPI Cloud (`[tool.fastapi]` no `pyproject.tom
 2. No painel do app, defina as variáveis `DATABASE_URL` (`postgresql+asyncpg://...` do Neon) e `APP_PASSPHRASE` (ASCII).
 3. O worker em casa usa o mesmo `DATABASE_URL`. Fora do túnel da Cloudflare não existe `CF-Connecting-IP`, então o limite por IP cai para o IP visto pelo servidor.
 
-### Experimento: baixar pela API com proxy (`PROXY_*`)
+### Extrair agora, pela API (`extract_now`)
 
-Desligado por padrão. Se `PROXY_USERNAME` e `PROXY_PASSWORD` estiverem definidas na API, cada pedido novo faz a própria API tentar baixar e analisar a música pelo proxy. Se o download falhar (bloqueio, proxy fora, rede), o job volta para "na fila" sem erro e o worker em casa assume; erros de análise (ex.: sem melodia) viram erro normalmente. O log diz se cada job foi resolvido "via proxy" ou "via worker".
+Na tela, o switch "Extrair agora (até 60 s; se não der, vai para o worker)" (desmarcado = "Enviar para o worker", o padrão; a escolha fica no `localStorage`) vira o campo `extract_now` do `POST /api/analyses`. Desmarcado, a API nunca baixa: só enfileira. Marcado, depois de criar o job a API tenta baixar e analisar a música em segundo plano, por até 60 s no total (`EXTRACT_TIMEOUT_SECONDS`); a resposta continua sendo o 202 imediato. Se o prazo estourar ou o download falhar (bloqueio, proxy fora, rede), o job volta para "na fila" sem erro e o worker em casa assume; erros de análise (ex.: sem melodia) viram erro normalmente. O yt-dlp também usa `socket_timeout` de 20 s. Se `PROXY_USERNAME` e `PROXY_PASSWORD` estiverem definidas, a extração sai pelo proxy; senão, direto. O log diz se cada job foi resolvido "via proxy" ou "via worker".
 
 | Variável | Padrão | O que faz |
 |---|---|---|
