@@ -11,7 +11,6 @@ dependencies = [
     "scipy",
     "soundfile",
     "sqlalchemy[asyncio]>=2.1.6",
-    "aiosqlite>=0.22.1",
     "asyncpg>=0.32.0",
 ]
 

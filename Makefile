@@ -1,16 +1,26 @@
 # Atalhos de desenvolvimento. Uso: make <alvo>.
-.PHONY: run worker test ruff ty up down build-up
+.PHONY: db run worker test ruff ty up down build-up
+
+# Postgres local do compose (porta 5432). Sobrescreva no ambiente para usar outro banco.
+export DATABASE_URL ?= postgresql+asyncpg://postgres:dev@localhost:5432/song_tonality
+# Banco separado para os testes, porque a fixture apaga o schema a cada teste.
+export TEST_DATABASE_URL ?= postgresql+asyncpg://postgres:dev@localhost:5432/song_tonality_test
+
+# Sobe só o Postgres do compose e garante o banco de testes (idempotente).
+db:
+	docker compose up -d --wait db
+	docker compose exec -T db psql -U postgres -tc "SELECT 1 FROM pg_database WHERE datname='song_tonality_test'" | grep -q 1 || docker compose exec -T db createdb -U postgres song_tonality_test
 
 # Sobe a API local com recarga automática (http://localhost:8007).
-run:
+run: db
 	uv run uvicorn app.main:app --reload --port 8007
 
 # Sobe o worker local, que processa os jobs pendentes do banco (precisa da API gravando no mesmo DATABASE_URL).
-worker:
+worker: db
 	uv run python -m app.worker
 
 # Roda só o teste informado: make test T=tests/test_notes.py
-test:
+test: db
 	uv run pytest -x --tb=short -q $(T)
 
 # Lint + formatação.
@@ -21,15 +31,14 @@ ruff:
 ty:
 	uv run ty check app tests
 
-# Sobe a API no Docker (http://localhost:8007), reconstruindo a imagem e trocando o contêiner
-# anterior, se houver; o banco fica no volume.
+# Sobe tudo pelo compose (db, API, worker e túnel) sem reconstruir a imagem.
 up:
-	docker build -t song-tonality-helper . && (docker rm -f song-tonality-helper >/dev/null 2>&1 || true) && docker run -d --rm --name song-tonality-helper -p 8007:8000 -v song-tonality-data:/srv/data song-tonality-helper
+	docker compose up -d
 
-# Derruba o contêiner da API.
+# Derruba os serviços do compose; o volume do banco é mantido.
 down:
-	docker stop song-tonality-helper
+	docker compose down
 
-# Sobe API, worker e túnel pelo compose, reconstruindo a imagem.
+# Sobe tudo pelo compose, reconstruindo a imagem.
 build-up:
 	docker compose up -d --build

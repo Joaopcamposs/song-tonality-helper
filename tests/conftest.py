@@ -7,11 +7,13 @@ import pytest
 import pytest_asyncio
 import soundfile as sf
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.services import ratelimit, store
 
 SAMPLE_RATE = 22050
+DEFAULT_TEST_URL = "postgresql+asyncpg://postgres:dev@localhost:5432/song_tonality_test"
 
 
 @pytest.fixture
@@ -40,18 +42,18 @@ def make_wav(tmp_path: Path) -> Callable[[list[tuple[int | None, float]]], Path]
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def db(tmp_path: Path):
-    """Banco novo para cada teste: SQLite temporário ou o Postgres de `TEST_DATABASE_URL`."""
-    url = os.environ.get("TEST_DATABASE_URL")
-    if url is None:
-        store.configure(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
-    else:
-        # O Postgres persiste entre testes: apaga o schema do app antes de cada um.
-        cleaner = create_async_engine(url)
+async def db():
+    """Banco novo para cada teste: apaga o schema do app no Postgres de `TEST_DATABASE_URL`."""
+    url = os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_URL)
+    cleaner = create_async_engine(url)
+    try:
         async with cleaner.begin() as connection:
             await connection.execute(text(f'DROP SCHEMA IF EXISTS "{store.SCHEMA}" CASCADE'))
+    except OSError, DBAPIError:
+        pytest.exit("Postgres de testes inacessível: rode `make db` (ou defina TEST_DATABASE_URL).")
+    finally:
         await cleaner.dispose()
-        store.configure(url)
+    store.configure(url)
     await store.create_tables()
     yield
     await store.dispose()

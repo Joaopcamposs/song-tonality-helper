@@ -35,7 +35,7 @@ async def recover_orphans() -> None:
 
 async def main() -> None:
     """Prepara o banco e processa a fila até receber SIGINT ou SIGTERM."""
-    store.configure(os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///data/analyses.db"))
+    store.configure(store.database_url())
     poll = float(os.environ.get("WORKER_POLL_SECONDS", "5"))
     await store.create_tables()
     await recover_orphans()

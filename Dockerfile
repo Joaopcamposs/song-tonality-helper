@@ -15,10 +15,8 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY app ./app
 COPY frontend ./frontend
 
-# O banco SQLite fica num volume, para as análises sobreviverem a recriações do contêiner.
-ENV PATH="/srv/.venv/bin:$PATH" \
-    DATABASE_URL=sqlite+aiosqlite:////srv/data/analyses.db
-VOLUME /srv/data
+# DATABASE_URL (Postgres) vem de fora: do compose ou do ambiente de nuvem.
+ENV PATH="/srv/.venv/bin:$PATH"
 EXPOSE 8000
 
 # Sobe a API.

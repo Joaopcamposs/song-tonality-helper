@@ -28,7 +28,7 @@ Session = Annotated[AsyncSession, Depends(store.get_session)]
 
 
 def _utc(moment: datetime) -> datetime:
-    """O SQLite devolve datas sem fuso; elas são sempre UTC."""
+    """As datas vêm do banco sem fuso; elas são sempre UTC."""
     return moment.replace(tzinfo=UTC)
 
 

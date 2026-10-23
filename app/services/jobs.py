@@ -105,7 +105,7 @@ async def claim(session: AsyncSession) -> str | None:
         .where(Job.status == "pending")
         .order_by(Job.updated_at)
         .limit(1)
-        .with_for_update(skip_locked=True)  # ignorado pelo SQLite
+        .with_for_update(skip_locked=True)
         .scalar_subquery()
     )
     # A condição repetida no UPDATE garante que só um worker ganha cada job.

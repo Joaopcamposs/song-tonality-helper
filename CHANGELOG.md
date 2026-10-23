@@ -2,11 +2,12 @@
 
 ## Não lançado
 
+- **Só Postgres:** o SQLite e o `aiosqlite` foram removidos. `DATABASE_URL` (`postgresql+asyncpg://...`) agora é obrigatória; o `compose.yaml` ganhou o serviço `db` (postgres:17, volume `song-tonality-db`) de que API e worker dependem, e `make db` o sobe sozinho. `make run`, `make worker` e `make test` usam o Postgres local por padrão. Dados do antigo `data/analyses.db` não são migrados.
 - **Palavra secreta opcional:** com `APP_PASSPHRASE` definida, toda rota `/api` (menos `/api/health`) exige o cabeçalho `X-App-Passphrase` (401 sem ele ou errado; 429 após 10 erros por hora por IP). A tela pede a palavra ao receber 401 e a guarda no `localStorage`. Sem a variável, nada muda.
-- **Schema próprio no Postgres:** as tabelas `analyses` e `jobs` agora vivem no schema `song-tonality-helper` (criado na subida); no SQLite nada muda. Quem já tinha tabelas no schema `public` precisa recriá-las ou movê-las (`ALTER TABLE ... SET SCHEMA`).
+- **Schema próprio no Postgres:** as tabelas `analyses` e `jobs` agora vivem no schema `song-tonality-helper` (criado na subida);. Quem já tinha tabelas no schema `public` precisa recriá-las ou movê-las (`ALTER TABLE ... SET SCHEMA`).
 - **Worker local:** a API agora só enfileira o pedido (job `pending`, "Na fila" na tela); `python -m app.worker` (`make worker`, serviço `worker` no `compose.yaml`) baixa, analisa e grava, consultando o banco a cada `WORKER_POLL_SECONDS` (padrão 5). Ao subir, o worker devolve à fila jobs interrompidos; a API não marca mais jobs como "interrompidos" na subida.
 - Limite de pedidos: no máximo `MAX_REQUESTS_PER_HOUR` (padrão 20) novos pedidos por IP por hora, com 429 ao exceder; análise já guardada ou job em curso não conta.
-- **Mudança de configuração:** `DATABASE_PATH` foi substituída por `DATABASE_URL` (SQLite ou Postgres via `asyncpg`; padrão `sqlite+aiosqlite:///data/analyses.db`). O andamento dos jobs agora fica na tabela `jobs` do banco, e jobs interrompidos por reinício viram erro ("Análise interrompida, tente de novo.").
+- **Mudança de configuração:** `DATABASE_PATH` foi substituída por `DATABASE_URL` (Postgres via `asyncpg`). O andamento dos jobs agora fica na tabela `jobs` do banco, e jobs interrompidos por reinício viram erro ("Análise interrompida, tente de novo.").
 - Metadados de web app: favicon, ícone do iOS (`apple-touch-icon`), `manifest.webmanifest` e imagem de compartilhamento, para instalar na tela inicial do iPhone e abrir em tela cheia.
 - `compose.yaml` com a API e o Cloudflare Tunnel para publicar o app em casa (token em `.env`, modelo em `.env.example`).
 - Apagar uma música da lista (botão com confirmação na tela; `DELETE /api/analyses/{video_id}`, 204, 404 se não existe e 409 se está em análise).

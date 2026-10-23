@@ -1,39 +1,49 @@
 # Publica o app em casa: a API, o worker que analisa e o Cloudflare Tunnel, que expõe o app na internet sem abrir portas.
 # Uso: copie .env.example para .env, preencha TUNNEL_TOKEN e rode `docker compose up -d --build`.
 services:
+  # Postgres do app (desenvolvimento e casa). Em produção na nuvem o DATABASE_URL vem do Neon.
+  # A porta só abre para a máquina local, para `make run`/`make test` falarem com ele.
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev}
+      POSTGRES_DB: song_tonality
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - song-tonality-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d song_tonality"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
   app:
     build: .
     restart: unless-stopped
     # Só a máquina local acessa direto; o acesso público passa pelo túnel.
     ports:
       - "127.0.0.1:8007:8000"
-    # Palavra secreta da API (vazia = sem proteção); defina no .env.
+    # Palavra secreta da API (vazia = sem proteção) e banco; ambos sobrescrevíveis no .env.
     environment:
       APP_PASSPHRASE: ${APP_PASSPHRASE:-}
-    # O banco SQLite fica no volume, para as análises sobreviverem a recriações.
-    volumes:
-      - song-tonality-data:/srv/data
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-dev}@db:5432/song_tonality}
+    depends_on:
+      db:
+        condition: service_healthy
 
   # Worker: pega os jobs pendentes do banco, baixa o áudio e analisa. Usa a mesma imagem da API;
-  # numa instalação com API na nuvem, rode só este serviço em casa, com o DATABASE_URL do Postgres.
+  # numa instalação com API na nuvem, rode só este serviço em casa, com o DATABASE_URL do Neon.
   worker:
     build: .
     restart: unless-stopped
     command: python -m app.worker
-    # Compartilha o banco SQLite da API; com Postgres, defina DATABASE_URL nos dois serviços.
-    volumes:
-      - song-tonality-data:/srv/data
-
-  # Postgres só para desenvolvimento: `docker compose --profile dev up -d db` e
-  # DATABASE_URL=postgresql+asyncpg://postgres:dev@localhost:5432/stm
-  db:
-    image: postgres:17
-    profiles: [dev]
     environment:
-      POSTGRES_PASSWORD: dev
-      POSTGRES_DB: stm
-    ports:
-      - "127.0.0.1:5432:5432"
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-dev}@db:5432/song_tonality}
+    depends_on:
+      db:
+        condition: service_healthy
 
   tunnel:
     image: cloudflare/cloudflared:latest
@@ -46,4 +56,4 @@ services:
       - app
 
 volumes:
-  song-tonality-data:
+  song-tonality-db:

@@ -1,11 +1,11 @@
-"""Armazenamento das análises em SQLite ou Postgres (SQLAlchemy assíncrono)."""
+"""Armazenamento das análises no Postgres (SQLAlchemy assíncrono)."""
 
+import os
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Literal
 
-from sqlalchemy import JSON, MetaData, String, make_url, select, text
+from sqlalchemy import JSON, MetaData, String, select, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -14,9 +14,10 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from app.domain.errors import DomainError
 from app.domain.pitch import ALGO_VERSION, AudioFeatures
 
-# Schema próprio no Postgres, para dividir o banco com outros apps; o SQLite não tem schema.
+# Schema próprio no Postgres, para dividir o banco com outros apps.
 SCHEMA = "song-tonality-helper"
 
 
@@ -39,7 +40,7 @@ class Analysis(Base):
     top_times: Mapped[list[float]] = mapped_column(JSON)
     chroma_profile: Mapped[list[float]] = mapped_column(JSON)
     algo_version: Mapped[int]
-    created_at: Mapped[datetime]  # UTC; o SQLite devolve sem fuso
+    created_at: Mapped[datetime]  # UTC ingênuo (coluna sem fuso)
 
 
 JobStatus = Literal["pending", "downloading", "analyzing", "error"]
@@ -60,25 +61,30 @@ _engine: AsyncEngine | None = None
 _sessions: async_sessionmaker[AsyncSession] | None = None
 
 
+def database_url() -> str:
+    """Lê `DATABASE_URL` do ambiente; sem ela o app não sobe."""
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise DomainError(
+            "Defina DATABASE_URL com a URL do Postgres "
+            "(postgresql+asyncpg://usuario:senha@host:5432/banco); "
+            "localmente, rode `make db` e use `make run`."
+        )
+    return url
+
+
 def configure(url: str) -> None:
-    """Aponta o armazenamento para a URL (SQLite ou Postgres); no SQLite cria a pasta se faltar."""
+    """Aponta o armazenamento para o Postgres da URL (`postgresql+asyncpg://...`)."""
     global _engine, _sessions
-    parsed = make_url(url)
-    if parsed.get_backend_name() == "sqlite" and parsed.database:
-        Path(parsed.database).parent.mkdir(parents=True, exist_ok=True)
-    options = (
-        {"schema_translate_map": {SCHEMA: None}} if parsed.get_backend_name() == "sqlite" else {}
-    )
-    _engine = create_async_engine(url, execution_options=options)
+    _engine = create_async_engine(url)
     _sessions = async_sessionmaker(_engine, expire_on_commit=False)
 
 
 async def create_tables() -> None:
-    """Cria o schema (só no Postgres) e as tabelas que ainda não existem."""
+    """Cria o schema e as tabelas que ainda não existem."""
     assert _engine is not None, "store.configure() não foi chamado"
     async with _engine.begin() as connection:
-        if connection.dialect.name == "postgresql":
-            await connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{SCHEMA}"'))
+        await connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{SCHEMA}"'))
         await connection.run_sync(Base.metadata.create_all)
 
 

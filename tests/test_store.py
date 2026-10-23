@@ -1,12 +1,11 @@
 import os
-from pathlib import Path
 
-import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.domain.pitch import ALGO_VERSION, AudioFeatures
 from app.services import store
+from tests.conftest import DEFAULT_TEST_URL
 
 
 def _features(top_midi: int = 71) -> AudioFeatures:
@@ -50,18 +49,8 @@ async def test_list_recent_is_newest_first():
     assert [r.video_id for r in rows] == ["c", "b", "a"]
 
 
-async def test_database_file_is_created_in_missing_folder(tmp_path: Path):
-    path = tmp_path / "sub" / "x.db"
-    store.configure(f"sqlite+aiosqlite:///{path}")
-    await store.create_tables()
-    assert path.exists()
-    await store.dispose()
-
-
 async def test_tables_live_in_own_schema_on_postgres():
-    url = os.environ.get("TEST_DATABASE_URL")
-    if url is None:
-        pytest.skip("precisa de TEST_DATABASE_URL (Postgres)")
+    url = os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_URL)
     engine = create_async_engine(url)
     async with engine.connect() as connection:
         rows = await connection.execute(
@@ -73,9 +62,3 @@ async def test_tables_live_in_own_schema_on_postgres():
         found = {tuple(row) for row in rows}
     await engine.dispose()
     assert found == {(store.SCHEMA, "analyses"), (store.SCHEMA, "jobs")}
-
-
-async def test_save_works_on_sqlite_without_schema():
-    async with store.session() as session:
-        await store.save(session, "abc", "T", 1, _features())
-        assert await store.find(session, "abc") is not None

@@ -4,10 +4,11 @@ Ferramenta pessoal de estudo musical: cole o link de uma música do YouTube, esc
 
 ## Como usar
 
-Requisitos: [uv](https://docs.astral.sh/uv/) e `ffmpeg` (`brew install ffmpeg`).
+Requisitos: [uv](https://docs.astral.sh/uv/), `ffmpeg` (`brew install ffmpeg`) e Docker (para o Postgres local).
 
 ```bash
 uv sync
+make db           # Postgres do compose (porta 5432); `run`, `worker` e `test` já o sobem
 make run          # API em http://localhost:8007
 make worker       # em outro terminal: processa a fila de análises
 ```
@@ -17,20 +18,20 @@ make worker       # em outro terminal: processa a fila de análises
 3. Clique em Analisar e leia o relatório: nota mais aguda, tom detectado, deslocamento em semitons, novo tom, grau da nota, trechos em que ela aparece e o ranking das notas.
 4. A análise fica guardada: colar de novo o mesmo vídeo (em qualquer forma de link) avisa que já foi analisado e mostra o resultado na hora. A lista "Músicas já analisadas" reabre qualquer uma, e trocar o teto recalcula o relatório sem baixar nada. O botão "Apagar" (com confirmação) tira a música da lista.
 
-As análises e o andamento dos jobs ficam num banco escolhido por `DATABASE_URL`: por padrão SQLite em `data/analyses.db` (`sqlite+aiosqlite:///data/analyses.db`; apague o arquivo para recomeçar), ou Postgres (`postgresql+asyncpg://usuario:senha@host:5432/banco`). No Docker o SQLite fica no volume `song-tonality-data`. Para rodar os testes contra Postgres, defina `TEST_DATABASE_URL` (o schema `song-tonality-helper` é apagado e recriado a cada teste, use um banco descartável). No Postgres as tabelas ficam no schema próprio `song-tonality-helper`, criado automaticamente, o que permite dividir o banco com outros apps.
+As análises e o andamento dos jobs ficam num Postgres escolhido por `DATABASE_URL` (obrigatória, `postgresql+asyncpg://usuario:senha@host:5432/banco`). Localmente, `make db` sobe o Postgres do compose (banco `song_tonality`, senha `dev`, só em `127.0.0.1:5432`) e `make run`/`make worker` já usam essa URL; exporte `DATABASE_URL` para apontar para outro banco. Em produção na nuvem, `DATABASE_URL` vem do Neon (use `ssl=require` no lugar de `sslmode=require`); no compose, defina-a no `.env` para sobrescrever o serviço `db`. As tabelas ficam no schema próprio `song-tonality-helper`, criado automaticamente, o que permite dividir o banco com outros apps. Os testes usam o banco `song_tonality_test` (criado por `make db`; `TEST_DATABASE_URL` sobrescreve) porque a fixture apaga e recria o schema a cada teste.
 
 A API só enfileira o pedido (status "na fila"); quem baixa e analisa é o worker (`python -m app.worker`, ou `make worker`). Sem o worker rodando, as análises ficam pendentes.
 
 | Variável | Quem usa | Padrão |
 | --- | --- | --- |
-| `DATABASE_URL` | API e worker (o mesmo banco) | `sqlite+aiosqlite:///data/analyses.db` |
+| `DATABASE_URL` | API e worker (o mesmo banco); obrigatória | nenhum (no `make`/compose, o Postgres local) |
 | `WORKER_POLL_SECONDS` | worker: intervalo entre consultas à fila | `5` |
 | `APP_PASSPHRASE` | API: palavra secreta; se definida, toda rota `/api` (menos `/api/health`) exige o cabeçalho `X-App-Passphrase` e a tela pede a palavra (guardada no `localStorage`); 10 erros por hora por IP levam a 429. Vazia ou ausente: sem proteção. O front estático continua público | vazia |
 | `MAX_REQUESTS_PER_HOUR` | API: novos pedidos por IP por hora (429 ao exceder; reaproveitar análise guardada ou job em curso não conta) | `20` |
 
 API na nuvem + worker em casa: aponte `DATABASE_URL` dos dois para o mesmo Postgres (ex.: Neon). Na nuvem rode só a API; em casa, só o worker (`docker compose up -d --build worker` ou `make worker`), já que o YouTube costuma bloquear IPs de nuvem. O worker só faz conexões de saída, sem túnel. Rode um único worker por banco: ao subir, ele devolve à fila os jobs que ficaram em andamento. Ctrl+C ou SIGTERM encerram depois do job atual.
 
-Com Docker: `make up` sobe só a API (mesma porta); `make down` a derruba. Para API e worker juntos, use `docker compose up -d --build`.
+Com Docker: `make up` sobe tudo pelo compose (Postgres, API, worker e túnel), `make build-up` reconstruindo a imagem e `make down` derruba tudo (o volume do banco fica).
 
 ### API
 

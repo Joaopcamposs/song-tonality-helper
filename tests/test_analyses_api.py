@@ -8,7 +8,7 @@ from httpx import ASGITransport
 from sqlalchemy import func, select
 
 from app import worker
-from app.domain.errors import DownloadError, NoMelodyError
+from app.domain.errors import DomainError, DownloadError, NoMelodyError
 from app.domain.pitch import ALGO_VERSION, AudioFeatures
 from app.main import app
 from app.services import jobs, store
@@ -263,12 +263,11 @@ async def test_ceilings_endpoint_lists_options(client):
     assert body["options"][0] == {"midi": 48, "name": "C3"}
 
 
-async def test_lifespan_creates_database_file(tmp_path, monkeypatch):
-    path = tmp_path / "x" / "a.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{path}")
-    await store.dispose()  # fecha o engine da fixture antes de o lifespan trocá-lo
-    async with app.router.lifespan_context(app):
-        assert path.exists()
+async def test_lifespan_requires_database_url(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(DomainError, match="DATABASE_URL"):
+        async with app.router.lifespan_context(app):
+            pass
 
 
 async def test_failed_reanalysis_keeps_old_report_readable(client, monkeypatch):
