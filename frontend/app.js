@@ -11,6 +11,7 @@ const CONFIRM_MS = 4000;
 const FETCH_ATTEMPTS = 3;
 const SLOW_MS = 5 * 60 * 1000;
 const EXTRACT_KEY = "extractNow";
+const BACKGROUND_TEXT = "Pedido recebido: a música está sendo processada em segundo plano. Quando ficar pronta, ela aparece na lista de músicas analisadas.";
 const SLOW_TEXT = "Está demorando: o worker pode estar desligado.";
 const EXTRACT_LABEL = {
   true: "Tenta na hora (até 60 s); se não der, vai para o worker",
@@ -463,7 +464,15 @@ async function analyze(event) {
       noticeBox.textContent = `Você já analisou esta música em ${dateText(created.analyzed_at)}.`;
       noticeBox.hidden = false;
     }
-    await loadReport(created.video_id);
+    if (!created.already_analyzed && !extractNow.checked) {
+      // Enviado ao worker (202): não espera; a lista se atualiza quando ficar pronto.
+      statusBox.hidden = true;
+      noticeBox.textContent = BACKGROUND_TEXT;
+      noticeBox.hidden = false;
+      urlInput.value = "";
+    } else {
+      await loadReport(created.video_id);
+    }
     await refreshHistory();
   } catch (error) {
     showError(error.message);
