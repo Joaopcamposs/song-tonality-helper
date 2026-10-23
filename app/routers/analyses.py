@@ -67,7 +67,7 @@ async def create_analysis(
         )
     progress = await jobs.get(session, video_id)
     if progress is None or progress.status == "error":  # só pedido novo conta no limite
-        client = request.client.host if request.client else "desconhecido"
+        client = ratelimit.client_ip(request)
         if ratelimit.exceeded(client):
             raise HTTPException(
                 status.HTTP_429_TOO_MANY_REQUESTS,

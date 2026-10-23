@@ -330,3 +330,18 @@ async def test_rate_limit_blocks_new_jobs_per_ip_but_not_reuse(client, monkeypat
     while await worker.process_next():
         pass
     assert (await _post(client, "https://youtu.be/aaaaaaaaaaa")).status_code == 200
+
+
+async def test_rate_limit_is_per_cloudflare_ip(client, monkeypatch):
+    monkeypatch.setenv("MAX_REQUESTS_PER_HOUR", "1")
+
+    async def post(video: str, ip: str) -> int:
+        url = f"https://youtu.be/{video}"
+        response = await client.post(
+            "/api/analyses", json={"url": url}, headers={"CF-Connecting-IP": ip}
+        )
+        return response.status_code
+
+    assert await post("aaaaaaaaaaa", "1.1.1.1") == 202
+    assert await post("bbbbbbbbbbb", "1.1.1.1") == 429
+    assert await post("bbbbbbbbbbb", "2.2.2.2") == 202

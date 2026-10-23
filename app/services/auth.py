@@ -16,12 +16,13 @@ def require_passphrase(request: Request) -> None:
     expected = os.environ.get("APP_PASSPHRASE", "")
     if not expected:  # vazia ou ausente: proteção desligada
         return
-    client = f"senha:{request.client.host if request.client else 'desconhecido'}"
+    client = f"senha:{ratelimit.client_ip(request)}"
     if ratelimit.exceeded(client, MAX_FAILURES_PER_HOUR):
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS, "Tentativas demais, tente de novo mais tarde."
         )
-    given = request.headers.get(HEADER, "")
-    if not secrets.compare_digest(given.encode(), expected.encode()):
+    # Cabeçalhos HTTP são latin-1: valores fora disso viram "?" em vez de levantar exceção.
+    given = request.headers.get(HEADER, "").encode("latin-1", errors="replace")
+    if not secrets.compare_digest(given, expected.encode("latin-1", errors="replace")):
         ratelimit.record(client)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Palavra secreta ausente ou incorreta.")

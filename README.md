@@ -26,7 +26,7 @@ A API só enfileira o pedido (status "na fila"); quem baixa e analisa é o worke
 | --- | --- | --- |
 | `DATABASE_URL` | API e worker (o mesmo banco); obrigatória | nenhum (no `make`/compose, o Postgres local) |
 | `WORKER_POLL_SECONDS` | worker: intervalo entre consultas à fila | `5` |
-| `APP_PASSPHRASE` | API: palavra secreta; se definida, toda rota `/api` (menos `/api/health`) exige o cabeçalho `X-App-Passphrase` e a tela pede a palavra (guardada no `localStorage`); 10 erros por hora por IP levam a 429. Vazia ou ausente: sem proteção. O front estático continua público | vazia |
+| `APP_PASSPHRASE` | API: palavra secreta; se definida, toda rota `/api` (menos `/api/health`) exige o cabeçalho `X-App-Passphrase` e a tela pede a palavra (guardada no `localStorage`); 10 erros por hora por IP levam a 429. Vazia ou ausente: sem proteção. Use só ASCII (sem acentos): o cabeçalho HTTP é latin-1. O front estático continua público | vazia |
 | `MAX_REQUESTS_PER_HOUR` | API: novos pedidos por IP por hora (429 ao exceder; reaproveitar análise guardada ou job em curso não conta) | `20` |
 
 API na nuvem + worker em casa: aponte `DATABASE_URL` dos dois para o mesmo Postgres (ex.: Neon). Na nuvem rode só a API; em casa, só o worker (`docker compose up -d --build worker` ou `make worker`), já que o YouTube costuma bloquear IPs de nuvem. O worker só faz conexões de saída, sem túnel. Rode um único worker por banco: ao subir, ele devolve à fila os jobs que ficaram em andamento. Ctrl+C ou SIGTERM encerram depois do job atual.

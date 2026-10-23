@@ -4,8 +4,29 @@ import os
 import time
 from collections import defaultdict, deque
 
+from fastapi import Request
+
 WINDOW_SECONDS = 3600
 _hits: defaultdict[str, deque[float]] = defaultdict(deque)
+
+
+def client_ip(request: Request) -> str:
+    """IP do cliente: `CF-Connecting-IP` se presente, senão o endereço da conexão.
+
+    O cabeçalho é confiável porque o compose publica a porta só em 127.0.0.1, então
+    apenas o Cloudflare Tunnel (que o define) alcança a API; atrás dele,
+    `request.client.host` seria sempre o IP do túnel.
+    """
+    forwarded = request.headers.get("cf-connecting-ip")
+    if forwarded:
+        return forwarded
+    return request.client.host if request.client else "desconhecido"
+
+
+def _sweep() -> None:
+    """Descarta as chaves cujas marcas expiraram todas, para `_hits` não crescer sem fim."""
+    for key in list(_hits):
+        _recent(key)
 
 
 def _recent(key: str) -> deque[float]:
@@ -21,6 +42,7 @@ def _recent(key: str) -> deque[float]:
 
 def exceeded(key: str, limit: int | None = None) -> bool:
     """Diz se a chave já gastou `limit` registros da janela (padrão `MAX_REQUESTS_PER_HOUR`, 20)."""
+    _sweep()
     if limit is None:
         limit = int(os.environ.get("MAX_REQUESTS_PER_HOUR", "20"))
     return len(_recent(key)) >= limit
@@ -28,6 +50,7 @@ def exceeded(key: str, limit: int | None = None) -> bool:
 
 def record(key: str) -> None:
     """Conta um novo pedido do IP."""
+    _sweep()
     _hits[key].append(time.monotonic())
 
 

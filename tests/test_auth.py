@@ -41,3 +41,19 @@ async def test_too_many_failures_block_with_429(client, monkeypatch):
         assert (await client.get("/api/ceilings", headers={HEADER: "x"})).status_code == 401
     assert (await client.get("/api/ceilings", headers={HEADER: "x"})).status_code == 429
     assert (await client.get("/api/ceilings", headers={HEADER: "segredo"})).status_code == 429
+
+
+async def test_invalid_header_encoding_is_401_not_500(client, monkeypatch):
+    monkeypatch.setenv("APP_PASSPHRASE", "segredo")
+    response = await client.get("/api/ceilings", headers={HEADER.encode(): "açaí é√".encode()})
+    assert response.status_code == 401
+
+
+async def test_failures_are_counted_per_cloudflare_ip(client, monkeypatch):
+    monkeypatch.setenv("APP_PASSPHRASE", "segredo")
+    for _ in range(10):
+        await client.get("/api/ceilings", headers={HEADER: "x", "CF-Connecting-IP": "1.1.1.1"})
+    first = {HEADER: "x", "CF-Connecting-IP": "1.1.1.1"}
+    blocked = await client.get("/api/ceilings", headers=first)
+    other = await client.get("/api/ceilings", headers={**first, "CF-Connecting-IP": "2.2.2.2"})
+    assert (blocked.status_code, other.status_code) == (429, 401)

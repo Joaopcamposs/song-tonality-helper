@@ -73,3 +73,32 @@ async def test_orphans_are_requeued_when_worker_starts(monkeypatch):
     await worker.recover_orphans()
     assert await worker.process_next() is True
     assert calls == [VIDEO_ID]
+
+
+async def test_job_stuck_by_db_failure_is_requeued_and_finishes(monkeypatch):
+    calls: list[str] = []
+    _fake_pipeline(monkeypatch, calls)
+    await _enqueue()
+    real_finish, real_fail = jobs._finish, jobs._fail
+    failures = {"left": 1}
+
+    async def flaky_finish(video_id: str) -> None:
+        if failures["left"]:
+            raise OSError("banco caiu")
+        await real_finish(video_id)
+
+    async def flaky_fail(video_id: str, message: str) -> None:
+        if failures["left"]:
+            failures["left"] -= 1
+            raise OSError("banco caiu")
+        await real_fail(video_id, message)
+
+    monkeypatch.setattr(jobs, "_finish", flaky_finish)
+    monkeypatch.setattr(jobs, "_fail", flaky_fail)
+    busy, needs_recovery = await worker.run_once(False)
+    assert (busy, needs_recovery) == (False, True)
+    busy, needs_recovery = await worker.run_once(needs_recovery)
+    assert (busy, needs_recovery) == (True, False)
+    async with store.session() as session:
+        assert await store.find(session, VIDEO_ID) is not None
+        assert await jobs.get(session, VIDEO_ID) is None
