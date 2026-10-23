@@ -61,15 +61,9 @@ Resultado de referência (aceite): "Dois Passarinhos" (Alan e Aladim), teto F#4 
 
 ---
 
-## Publicar em casa
+## Rodar em casa
 
-O app roda em casa (o YouTube costuma bloquear downloads de IPs de nuvem) e vai para a internet por um Cloudflare Tunnel, sem abrir portas no roteador.
-
-1. No painel da Cloudflare (Zero Trust > Networks > Tunnels), crie um túnel e copie o token.
-2. No túnel, adicione um *public hostname* (ex.: `song.seudominio.com.br`) com serviço `http://app:8000`.
-3. Copie `.env.example` para `.env` e cole o token em `TUNNEL_TOKEN`.
-4. Suba tudo (API, worker e túnel): `docker compose up -d --build`.
-5. Como o app não tem login, proteja o subdomínio em Zero Trust > Access > Applications, liberando só o seu e-mail.
+`docker compose up -d --build` sobe o Postgres, a API (em `127.0.0.1:8007`) e o worker. Para publicar na internet, veja a seção seguinte.
 
 ## Publicar no FastAPI Cloud
 
@@ -77,7 +71,7 @@ A API e o front podem ficar no FastAPI Cloud (`[tool.fastapi]` no `pyproject.tom
 
 1. `uv run fastapi login` e `uv run fastapi deploy` na primeira vez (cria o app e o `.fastapicloud/`, que não vai para o git). Depois, `make deploy`.
 2. No painel do app, defina as variáveis `DATABASE_URL` (`postgresql+asyncpg://...` do Neon) e `APP_PASSPHRASE` (ASCII).
-3. O worker em casa usa o mesmo `DATABASE_URL`. Fora do túnel da Cloudflare não existe `CF-Connecting-IP`, então o limite por IP cai para o IP visto pelo servidor.
+3. O worker em casa usa o mesmo `DATABASE_URL`.
 
 ### Extrair agora, pela API (`extract_now`)
 

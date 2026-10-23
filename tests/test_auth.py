@@ -50,16 +50,6 @@ async def test_invalid_header_encoding_is_401_not_500(client, monkeypatch):
     assert response.status_code == 401
 
 
-async def test_failures_are_counted_per_cloudflare_ip(client, monkeypatch):
-    monkeypatch.setenv("APP_PASSPHRASE", "segredo")
-    for _ in range(10):
-        await client.get("/api/ceilings", headers={HEADER: "x", "CF-Connecting-IP": "1.1.1.1"})
-    first = {HEADER: "x", "CF-Connecting-IP": "1.1.1.1"}
-    blocked = await client.get("/api/ceilings", headers=first)
-    other = await client.get("/api/ceilings", headers={**first, "CF-Connecting-IP": "2.2.2.2"})
-    assert (blocked.status_code, other.status_code) == (429, 401)
-
-
 async def test_without_passphrase_nothing_is_registered(client, monkeypatch):
     monkeypatch.setenv("APP_PASSPHRASE", "segredo")
     url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"

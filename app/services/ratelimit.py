@@ -11,15 +11,7 @@ _hits: defaultdict[str, deque[float]] = defaultdict(deque)
 
 
 def client_ip(request: Request) -> str:
-    """IP do cliente: `CF-Connecting-IP` se presente, senão o endereço da conexão.
-
-    O cabeçalho é confiável porque o compose publica a porta só em 127.0.0.1, então
-    apenas o Cloudflare Tunnel (que o define) alcança a API; atrás dele,
-    `request.client.host` seria sempre o IP do túnel.
-    """
-    forwarded = request.headers.get("cf-connecting-ip")
-    if forwarded:
-        return forwarded
+    """IP do cliente: o endereço da conexão, ou "desconhecido" se ele não vier."""
     return request.client.host if request.client else "desconhecido"
 
 
