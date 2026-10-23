@@ -80,6 +80,8 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 button.primary:hover { filter: brightness(1.07); }
 button.big { width: 100%; min-height: 54px; font-size: 1.05rem; }
 label { display: block; color: var(--muted); font-size: .85rem; font-weight: 600; }
+label.check { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+label.check > input { margin: 0; width: auto; }
 label > input, label > select { margin-top: 6px; color: var(--text); font-weight: 400; font-size: 1rem; }
 .stack { display: grid; gap: 14px; }
 

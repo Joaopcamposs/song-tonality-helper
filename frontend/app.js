@@ -7,6 +7,13 @@ const PASSPHRASE_HEADER = "X-App-Passphrase";
 const POLL_MS = 2000;
 const CONFIRM_MS = 4000;
 const FETCH_ATTEMPTS = 3;
+const SLOW_MS = 5 * 60 * 1000;
+const EXTRACT_KEY = "extractNow";
+const SLOW_TEXT = "Está demorando: o worker pode estar desligado.";
+const EXTRACT_LABEL = {
+  true: "Extrair agora (até 60 s; se não der, vai para o worker)",
+  false: "Enviar para o worker",
+};
 const STATUS_TEXT = {
   pending: "Na fila, aguardando o worker...",
   downloading: "Baixando o áudio do vídeo...",
@@ -16,6 +23,8 @@ const STATUS_TEXT = {
 const form = document.getElementById("form");
 const urlInput = document.getElementById("url");
 const ceilingSelect = document.getElementById("ceiling");
+const extractNow = document.getElementById("extract-now");
+const extractNowText = document.getElementById("extract-now-text");
 const submit = document.getElementById("submit");
 const statusBox = document.getElementById("status");
 const errorBox = document.getElementById("error");
@@ -40,6 +49,27 @@ function saveCeiling(midi) {
   } catch {
     // Sem armazenamento: a escolha só vale nesta visita.
   }
+}
+
+function readSavedExtractNow() {
+  try {
+    return localStorage.getItem(EXTRACT_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function saveExtractNow(value) {
+  try {
+    localStorage.setItem(EXTRACT_KEY, String(value));
+  } catch {
+    // Sem armazenamento: a escolha só vale nesta visita.
+  }
+}
+
+// O texto do switch acompanha o estado marcado.
+function showExtractLabel() {
+  extractNowText.textContent = EXTRACT_LABEL[extractNow.checked];
 }
 
 function readSavedPassphrase() {
@@ -240,7 +270,7 @@ async function fetchWithRetry(url) {
 
 // Busca o relatório do vídeo para o teto atual; espera enquanto a análise roda.
 // Devolve null se outra ação do usuário assumiu a tela no meio do caminho.
-async function loadReport(videoId, run = ++activeRun) {
+async function loadReport(videoId, run = ++activeRun, started = Date.now()) {
   const ceiling = Number(ceilingSelect.value);
   const response = await fetchWithRetry(`/api/analyses/${videoId}?ceiling_midi=${ceiling}`);
   if (run !== activeRun) return null;
@@ -257,10 +287,11 @@ async function loadReport(videoId, run = ++activeRun) {
     showError(analysis.error);
     return;
   }
-  statusBox.textContent = STATUS_TEXT[analysis.status];
+  const slow = Date.now() - started > SLOW_MS;
+  statusBox.textContent = slow ? `${STATUS_TEXT[analysis.status]} ${SLOW_TEXT}` : STATUS_TEXT[analysis.status];
   statusBox.hidden = false;
   await wait(POLL_MS);
-  return loadReport(videoId, run);
+  return loadReport(videoId, run, started);
 }
 
 async function loadHistory() {
@@ -349,7 +380,7 @@ async function analyze(event) {
     const response = await api("/api/analyses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: urlInput.value }),
+      body: JSON.stringify({ url: urlInput.value, extract_now: extractNow.checked }),
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
@@ -376,6 +407,12 @@ function onCeilingChange() {
   }
 }
 
+extractNow.checked = readSavedExtractNow();
+showExtractLabel();
+extractNow.addEventListener("change", () => {
+  saveExtractNow(extractNow.checked);
+  showExtractLabel();
+});
 ceilingSelect.addEventListener("change", onCeilingChange);
 form.addEventListener("submit", analyze);
 loadCeilings().catch(() => showError("Não consegui carregar a lista de tetos."));
