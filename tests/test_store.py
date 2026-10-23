@@ -47,7 +47,7 @@ async def test_list_recent_is_newest_first():
 
 async def test_database_file_is_created_in_missing_folder(tmp_path: Path):
     path = tmp_path / "sub" / "x.db"
-    store.configure(path)
+    store.configure(f"sqlite+aiosqlite:///{path}")
     await store.create_tables()
     assert path.exists()
     await store.dispose()

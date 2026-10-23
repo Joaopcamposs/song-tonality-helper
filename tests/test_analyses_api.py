@@ -211,7 +211,7 @@ async def test_ceilings_endpoint_lists_options(client):
 
 async def test_lifespan_creates_database_file(tmp_path, monkeypatch):
     path = tmp_path / "x" / "a.db"
-    monkeypatch.setenv("DATABASE_PATH", str(path))
+    monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{path}")
     await store.dispose()  # fecha o engine da fixture antes de o lifespan trocá-lo
     async with app.router.lifespan_context(app):
         assert path.exists()

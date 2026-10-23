@@ -14,8 +14,8 @@ from app.services import store
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
-    """Abre o banco na subida (`DATABASE_PATH`) e fecha as conexões ao desligar."""
-    store.configure(Path(os.environ.get("DATABASE_PATH", "data/analyses.db")))
+    """Abre o banco na subida (`DATABASE_URL`) e fecha as conexões ao desligar."""
+    store.configure(os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///data/analyses.db"))
     await store.create_tables()
     yield
     await store.dispose()

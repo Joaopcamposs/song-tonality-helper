@@ -1,10 +1,10 @@
-"""Armazenamento das análises em SQLite (SQLAlchemy assíncrono)."""
+"""Armazenamento das análises em SQLite ou Postgres (SQLAlchemy assíncrono)."""
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import JSON, select
+from sqlalchemy import JSON, make_url, select
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -40,11 +40,13 @@ _engine: AsyncEngine | None = None
 _sessions: async_sessionmaker[AsyncSession] | None = None
 
 
-def configure(database_path: Path) -> None:
-    """Aponta o armazenamento para o arquivo informado, criando a pasta se faltar."""
+def configure(url: str) -> None:
+    """Aponta o armazenamento para a URL (SQLite ou Postgres); no SQLite cria a pasta se faltar."""
     global _engine, _sessions
-    database_path.parent.mkdir(parents=True, exist_ok=True)
-    _engine = create_async_engine(f"sqlite+aiosqlite:///{database_path}")
+    parsed = make_url(url)
+    if parsed.get_backend_name() == "sqlite" and parsed.database:
+        Path(parsed.database).parent.mkdir(parents=True, exist_ok=True)
+    _engine = create_async_engine(url)
     _sessions = async_sessionmaker(_engine, expire_on_commit=False)
 
 

@@ -17,7 +17,7 @@ COPY frontend ./frontend
 
 # O banco SQLite fica num volume, para as análises sobreviverem a recriações do contêiner.
 ENV PATH="/srv/.venv/bin:$PATH" \
-    DATABASE_PATH=/srv/data/analyses.db
+    DATABASE_URL=sqlite+aiosqlite:////srv/data/analyses.db
 VOLUME /srv/data
 EXPOSE 8000
 

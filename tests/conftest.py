@@ -39,7 +39,7 @@ def make_wav(tmp_path: Path) -> Callable[[list[tuple[int | None, float]]], Path]
 @pytest_asyncio.fixture(autouse=True)
 async def db(tmp_path: Path):
     """Banco SQLite novo em arquivo temporário para cada teste."""
-    store.configure(tmp_path / "test.db")
+    store.configure(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
     await store.create_tables()
     yield
     await store.dispose()
