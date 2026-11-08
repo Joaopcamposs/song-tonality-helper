@@ -15,7 +15,7 @@ make worker       # em outro terminal: processa a fila de análises
 
 1. Cole o link do YouTube (um vídeo de até 10 minutos).
 2. Escolha o seu tom teto na lista (o valor fica salvo no navegador).
-3. Escolha o método de extração (switch) e clique em Analisar. Em "Enviar para o worker" (padrão) a tela avisa que a música é processada em segundo plano e a lista a traz quando ficar pronta; em "Extrair agora" a tela aguarda o relatório. O relatório traz a nota mais aguda, o tom detectado, deslocamento em semitons, novo tom, grau da nota, trechos em que ela aparece e o ranking das notas.
+3. Escolha o método de extração (switch) e clique em Analisar. Em "Enviar para o worker" (padrão) a tela avisa que a música é processada em segundo plano e a lista a traz quando ficar pronta; em "Extrair agora" a tela aguarda o relatório. O relatório traz a nota mais aguda, o tom detectado (um por trecho, se a música modular), deslocamento em semitons, novo tom, grau da nota, trechos em que ela aparece e o ranking das notas.
 4. A análise fica guardada: colar de novo o mesmo vídeo (em qualquer forma de link) avisa que já foi analisado e mostra o resultado na hora. Pedidos na fila ou que falharam aparecem em "Pedidos em andamento" (o erro tem botão "Dispensar"). A lista "Músicas já analisadas" reabre qualquer uma, e trocar o teto recalcula o relatório sem baixar nada. O botão "Apagar" (com confirmação) tira a música da lista.
 
 As análises e o andamento dos jobs ficam num Postgres escolhido por `DATABASE_URL` (obrigatória, `postgresql+asyncpg://usuario:senha@host:5432/banco`). Localmente, `make db` sobe o Postgres do compose (banco `song_tonality`, senha `dev`, só em `127.0.0.1:5432`) e `make run`/`make worker` já usam essa URL; exporte `DATABASE_URL` para apontar para outro banco. Em produção na nuvem, `DATABASE_URL` vem do Neon (use `ssl=require` no lugar de `sslmode=require`); no compose, defina-a no `.env` para sobrescrever o serviço `db`. As tabelas ficam no schema próprio `song-tonality-helper`, criado automaticamente, o que permite dividir o banco com outros apps. Os testes usam o banco `song_tonality_test` (criado por `make db`; `TEST_DATABASE_URL` sobrescreve) porque a fixture apaga e recria o schema a cada teste.
@@ -54,7 +54,7 @@ O app usa só a numeração padrão (a do librosa): o dó central é C4. A lista
 ### Limites
 
 - O método não separa a voz dos instrumentos: acordeão, segundas vozes e instrumentos agudos podem aparecer como notas altas. Por isso o relatório mostra o ranking das notas, e a nota mais aguda é a mais alta que aparece em pelo menos 100 quadros (cerca de 2,3 s no total).
-- O tom é detectado por estatística (correlação do chroma com os perfis de Krumhansl) e pode errar, principalmente entre relativos maior/menor ou em músicas com modulação. O deslocamento em semitons não depende dele; só o nome do novo tom.
+- O tom é detectado por estatística (correlação do chroma com os perfis de Krumhansl) e pode errar, principalmente entre relativos maior/menor ou em trechos curtos de modulação (modulações são detectadas por janelas de 10 s e a de uma janela só é ignorada). O deslocamento em semitons não depende dele; só o nome do novo tom.
 - Do seu computador o YouTube costuma liberar o download. Em servidores na nuvem ele bloqueia com frequência, exigindo cookies do navegador, o que é frágil. Por isso o deploy é opcional.
 
 Resultado de referência (aceite): "Dois Passarinhos" (Alan e Aladim), teto F#4 → nota mais aguda B4, tom G maior, -5 semitons, novo tom D maior; o topo cai em F#4.

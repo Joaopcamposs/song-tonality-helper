@@ -22,14 +22,19 @@ def test_top_times_point_to_where_note_plays(make_wav):
     assert all(9.5 <= t <= 20.5 for t in features.top_times)
 
 
-def test_chroma_profile_has_twelve_values(make_wav):
-    features = analyze_audio(make_wav([(67, 10)]))
-    assert len(features.chroma_profile) == 12
-    assert all(isinstance(v, float) for v in features.chroma_profile)
+def test_chroma_comes_in_windows_of_twelve_notes(make_wav):
+    features = analyze_audio(make_wav([(67, 30)]))
+    assert len(features.chroma_windows) == 3  # 30 s em janelas de 10 s
+    assert all(len(window) == 12 for window in features.chroma_windows)
+    assert all(isinstance(v, float) for window in features.chroma_windows for v in window)
+
+
+def test_short_audio_still_has_one_window(make_wav):
+    assert len(analyze_audio(make_wav([(67, 8)])).chroma_windows) == 1
 
 
 def test_algo_version_is_defined():
-    assert ALGO_VERSION == 1
+    assert ALGO_VERSION == 2
 
 
 def test_silence_raises_no_melody(make_wav):

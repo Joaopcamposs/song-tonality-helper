@@ -38,7 +38,7 @@ class Analysis(Base):
     top_midi: Mapped[int]
     ranking: Mapped[list[list[int]]] = mapped_column(JSON)
     top_times: Mapped[list[float]] = mapped_column(JSON)
-    chroma_profile: Mapped[list[float]] = mapped_column(JSON)
+    chroma_windows: Mapped[list[list[float]]] = mapped_column(JSON)
     algo_version: Mapped[int]
     created_at: Mapped[datetime]  # UTC ingênuo (coluna sem fuso)
 
@@ -126,7 +126,7 @@ async def save(
         top_midi=features.top_midi,
         ranking=[list(pair) for pair in features.ranking],
         top_times=features.top_times,
-        chroma_profile=features.chroma_profile,
+        chroma_windows=features.chroma_windows,
         algo_version=ALGO_VERSION,
         created_at=datetime.now(UTC).replace(tzinfo=None),
     )
@@ -157,5 +157,5 @@ def to_features(row: Analysis) -> AudioFeatures:
         top_midi=row.top_midi,
         ranking=[(midi, frames) for midi, frames in row.ranking],
         top_times=row.top_times,
-        chroma_profile=row.chroma_profile,
+        chroma_windows=row.chroma_windows,
     )

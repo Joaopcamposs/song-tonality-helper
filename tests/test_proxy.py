@@ -41,7 +41,7 @@ def pipeline(monkeypatch):
         if (error := behavior["analyze"]) is not None:
             raise error
         return AudioFeatures(
-            top_midi=71, ranking=[(71, 150)], top_times=[1.0], chroma_profile=[0.1] * 12
+            top_midi=71, ranking=[(71, 150)], top_times=[1.0], chroma_windows=[[0.1] * 12]
         )
 
     monkeypatch.setattr(worker, "download_audio", download)

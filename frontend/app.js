@@ -230,7 +230,9 @@ function renderReport(r, title) {
   reportBox.replaceChildren();
 
   const shift = el("div", undefined, "shift");
-  shift.append(el("span", `${signed(r.shift)} semitons`, "shift-value"), el("span", `Novo tom: ${r.new_key}`, "new-key"));
+  const modulates = r.sections.length > 1;
+  const newKeyLabel = modulates ? "Novo tom (no início)" : "Novo tom";
+  shift.append(el("span", `${signed(r.shift)} semitons`, "shift-value"), el("span", `${newKeyLabel}: ${r.new_key}`, "new-key"));
   const pair = el("div", undefined, "pair");
   pair.append(noteBox("Nota mais aguda hoje", r.top_note), el("span", "→", "arrow"), noteBox("Depois de transpor", r.new_top_note, "to"));
   const result = card(
@@ -242,14 +244,23 @@ function renderReport(r, title) {
   );
   result.classList.add("result");
 
-  const best = r.keys[0];
-  const others = r.keys.slice(1).map((k) => `${k.tonic} ${k.mode}`).join(" ou ");
+  const first = r.sections[0];
   const facts = el("div", undefined, "facts");
   facts.append(
-    fact(`${best.tonic} ${best.mode}`, "Tom detectado"),
+    fact(`${first.tonic} ${first.mode}`, modulates ? "Tom no início" : "Tom detectado"),
     fact(r.scale_degree, "Grau da nota mais aguda"),
   );
-  const keyCard = card(facts, el("p", `Outros candidatos: ${others}.`, "muted"));
+  const keyCard = card(facts);
+  if (modulates) {
+    const sectionChips = el("div", undefined, "chips");
+    for (const k of r.sections) {
+      sectionChips.append(el("span", `${clock(k.start)} · ${k.tonic} ${k.mode} → ${k.new_key}`, "chip"));
+    }
+    keyCard.append(
+      el("p", "A música muda de tom. O grau vale para o tom do início.", "muted"),
+      sectionChips,
+    );
+  }
 
   const chips = el("div", undefined, "chips");
   for (const t of r.top_times) chips.append(el("span", clock(t), "chip"));

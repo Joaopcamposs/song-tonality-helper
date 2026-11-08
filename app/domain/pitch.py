@@ -10,7 +10,7 @@ import numpy as np
 from scipy.signal import medfilt
 
 from app.domain.errors import NoMelodyError
-from app.domain.features import AudioFeatures
+from app.domain.features import CHROMA_WINDOW_SECONDS, AudioFeatures
 
 BINS_PER_OCTAVE = 36  # 3 divisões por semitom na CQT
 HOP = 512
@@ -79,8 +79,18 @@ def rank_notes(notes: list[int], counts: list[int]) -> tuple[int, list[tuple[int
     return sustained[0][0], sustained[:RANKING_SIZE]
 
 
+def _chroma_windows(chroma: np.ndarray) -> list[list[float]]:
+    """Média do chroma em janelas de CHROMA_WINDOW_SECONDS; a sobra final só conta se couber meia.
+
+    Sempre há ao menos uma janela: sem ~5 s de áudio a melodia nem seria detectada.
+    """
+    size = round(CHROMA_WINDOW_SECONDS * SAMPLE_RATE / HOP)
+    starts = [s for s in range(0, chroma.shape[1], size) if chroma.shape[1] - s >= size / 2]
+    return [chroma[:, s : s + size].mean(axis=1).tolist() for s in starts]
+
+
 def analyze_audio(path: Path) -> AudioFeatures:
-    """Analisa o arquivo e devolve a nota mais aguda sustentada, o ranking e o chroma."""
+    """Analisa o arquivo e devolve a nota mais aguda sustentada, o ranking e o chroma por janela."""
     y, _ = librosa.load(path, sr=SAMPLE_RATE, mono=True)
     y_harmonic, _ = librosa.effects.hpss(y, margin=3.0)  # mantém o harmônico, tira a percussão
     midi, confidence = _melody(y_harmonic)
@@ -93,4 +103,4 @@ def analyze_audio(path: Path) -> AudioFeatures:
 
     top_frames = np.flatnonzero(strong & (rounded == top_midi))
     times = [round(t, 1) for t in _runs(top_frames)[:MAX_TIMES]]
-    return AudioFeatures(top_midi, ranking, times, chroma.mean(axis=1).tolist())
+    return AudioFeatures(top_midi, ranking, times, _chroma_windows(chroma))

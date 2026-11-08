@@ -20,12 +20,14 @@ class RankedNote(BaseModel):
     frames: int
 
 
-class KeyOut(BaseModel):
-    """Um tom candidato e a correlação que ele obteve."""
+class KeySectionOut(BaseModel):
+    """Trecho da música num mesmo tom: início, tom, correlação e o tom depois de transpor."""
 
+    start: float
     tonic: str
     mode: Literal["maior", "menor"]
     score: float
+    new_key: str
 
 
 class Report(BaseModel):
@@ -35,11 +37,11 @@ class Report(BaseModel):
     ceiling: NoteOut
     ranking: list[RankedNote]
     top_times: list[float]
-    keys: list[KeyOut]
+    sections: list[KeySectionOut]
     shift: int
     alternative_shift: int
-    new_key: str
-    scale_degree: str
+    new_key: str  # novo tom do primeiro trecho
+    scale_degree: str  # grau da nota mais aguda no tom do primeiro trecho
     new_top_note: NoteOut
 
 
