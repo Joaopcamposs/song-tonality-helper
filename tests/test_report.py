@@ -44,3 +44,13 @@ def test_modulating_song_lists_each_key_with_its_new_key():
         (40.0, "F#", "C# maior"),
     ]
     assert report.new_key == "B maior"  # o do primeiro trecho
+
+
+def test_alternative_is_the_octave_up_when_shift_goes_down():
+    # A#4 com teto C#4: principal -9 (C#4); alternativa +3 (C#5).
+    features = AudioFeatures(
+        top_midi=70, ranking=[(70, 150)], top_times=[1.0], chroma_windows=[[0.05] * 12]
+    )
+    report = build_report(features, ceiling_midi=61)
+    assert (report.shift, report.alternative_shift) == (-9, 3)
+    assert report.new_top_note.name == "C#4"

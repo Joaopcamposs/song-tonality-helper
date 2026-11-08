@@ -4,9 +4,8 @@ _DEGREES = ["tônica", "♭2ª", "2ª", "♭3ª", "3ª", "4ª", "♭5ª", "5ª",
 
 
 def shift_semitones(top_midi: int, ceiling_midi: int) -> int:
-    """Menor deslocamento (de -6 a +5) que leva a nota mais aguda ao teto, módulo oitava."""
-    shift = (ceiling_midi - top_midi) % 12
-    return shift - 12 if shift >= 6 else shift
+    """Deslocamento (de -11 a 0) que leva a nota mais aguda ao teto sem passá-lo, módulo oitava."""
+    return -((top_midi - ceiling_midi) % 12)
 
 
 def transpose_tonic(tonic_pc: int, shift: int) -> int:
