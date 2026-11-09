@@ -36,6 +36,9 @@ def build_report(features: AudioFeatures, ceiling_midi: int) -> Report:
                 mode=s.mode,
                 score=round(s.score, 3),
                 new_key=_new_key(s.tonic_pc, s.mode, shift),
+                relative=f"{pitch_class_name(s.relative.tonic_pc)} {s.relative.mode}"
+                if s.relative
+                else None,
             )
             for s in sections
         ],

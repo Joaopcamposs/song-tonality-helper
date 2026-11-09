@@ -28,6 +28,7 @@ class KeySectionOut(BaseModel):
     mode: Literal["maior", "menor"]
     score: float
     new_key: str
+    relative: str | None = None  # tom relativo quase tão provável (mesmas notas), ex.: "A menor"
 
 
 class Report(BaseModel):

@@ -251,10 +251,13 @@ function renderReport(r, title) {
     fact(r.scale_degree, "Grau da nota mais aguda"),
   );
   const keyCard = card(facts);
+  if (first.relative) {
+    keyCard.append(el("p", `Também pode ser ${first.relative}: o relativo usa as mesmas notas e o áudio não separa os dois com certeza.`, "muted"));
+  }
   if (modulates) {
     const sectionChips = el("div", undefined, "chips");
     for (const k of r.sections) {
-      sectionChips.append(el("span", `${clock(k.start)} · ${k.tonic} ${k.mode} → ${k.new_key}`, "chip"));
+      sectionChips.append(el("span", `${clock(k.start)} · ${k.tonic} ${k.mode}${k.relative ? ` (ou ${k.relative})` : ""} → ${k.new_key}`, "chip"));
     }
     keyCard.append(
       el("p", "A música muda de tom. O grau vale para o tom do início.", "muted"),

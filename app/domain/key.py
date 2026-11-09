@@ -13,6 +13,7 @@ _MINOR = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3
 
 MIN_SCORE = 0.5  # janela com correlação menor que isso (silêncio, ruído) não decide o tom
 MIN_SECTION_WINDOWS = 2  # trecho menor que isso é empréstimo de acorde, não modulação
+MAX_RELATIVE_GAP = 0.2  # o relativo só vira alternativa se ficar a no máximo isso do tom escolhido
 
 
 @dataclass(frozen=True)
@@ -24,18 +25,30 @@ class KeyCandidate:
     score: float
 
 
+def _score(profile: np.ndarray, tonic_pc: int, mode: Literal["maior", "menor"]) -> float:
+    """Correlação do perfil de 12 notas com o modelo do tom; 0 para perfil plano (silêncio)."""
+    if np.ptp(profile) == 0:
+        return 0.0
+    reference = _MAJOR if mode == "maior" else _MINOR
+    return float(np.corrcoef(profile, np.roll(reference, tonic_pc))[0, 1])
+
+
 def detect_key(chroma_profile: Sequence[float]) -> list[KeyCandidate]:
     """Os 3 tons mais prováveis para o perfil médio de 12 notas, do melhor para o pior."""
     profile = np.asarray(chroma_profile, dtype=float)
-    candidates: list[KeyCandidate] = []
-    for mode, reference in (("maior", _MAJOR), ("menor", _MINOR)):
-        for tonic_pc in range(12):
-            if np.ptp(profile) == 0:  # perfil plano (silêncio): sem correlação possível
-                score = 0.0
-            else:
-                score = float(np.corrcoef(profile, np.roll(reference, tonic_pc))[0, 1])
-            candidates.append(KeyCandidate(tonic_pc, mode, score))
+    candidates = [
+        KeyCandidate(tonic_pc, mode, _score(profile, tonic_pc, mode))
+        for mode in ("maior", "menor")
+        for tonic_pc in range(12)
+    ]
     return sorted(candidates, key=lambda c: c.score, reverse=True)[:3]
+
+
+def _relative(key: KeyCandidate) -> tuple[int, Literal["maior", "menor"]]:
+    """Tom relativo: mesmas sete notas, outra tônica (C maior e Lá menor, por exemplo)."""
+    if key.mode == "maior":
+        return (key.tonic_pc + 9) % 12, "menor"
+    return (key.tonic_pc + 3) % 12, "maior"
 
 
 @dataclass(frozen=True)
@@ -46,6 +59,7 @@ class KeySection:
     tonic_pc: int
     mode: Literal["maior", "menor"]
     score: float
+    relative: KeyCandidate | None = None  # relativo quase tão provável quanto o tom escolhido
 
 
 @dataclass
@@ -62,13 +76,25 @@ class _Run:
         return (self.best.tonic_pc, self.best.mode) == (other.tonic_pc, other.mode)
 
 
+def _section(
+    start: float, key: KeyCandidate, score: float, profiles: list[np.ndarray]
+) -> KeySection:
+    """Monta o trecho; guarda o relativo se, nas mesmas janelas, ele ficar perto do tom."""
+    tonic_pc, mode = _relative(key)
+    relative_score = float(np.mean([_score(p, tonic_pc, mode) for p in profiles]))
+    close = score - relative_score <= MAX_RELATIVE_GAP
+    relative = KeyCandidate(tonic_pc, mode, relative_score) if close else None
+    return KeySection(start, key.tonic_pc, key.mode, score, relative)
+
+
 def key_sections(windows: Sequence[Sequence[float]]) -> list[KeySection]:
     """Trechos da música por tom, em ordem; uma música sem modulação dá um trecho só."""
     bests = [detect_key(window)[0] for window in windows]
     clear = [best if best.score >= MIN_SCORE else None for best in bests]
     if not any(clear):  # nada claro (silêncio, ruído): vale o perfil médio da música toda
         best = detect_key(np.mean(np.asarray(windows, dtype=float), axis=0).tolist())[0]
-        return [KeySection(0.0, best.tonic_pc, best.mode, best.score)]
+        mean = np.mean(np.asarray(windows, dtype=float), axis=0)
+        return [_section(0.0, best, best.score, [mean])]
 
     # Janela sem tom claro herda o da vizinha anterior (ou da primeira clara, no começo).
     labels: list[KeyCandidate] = []
@@ -100,11 +126,11 @@ def key_sections(windows: Sequence[Sequence[float]]) -> list[KeySection]:
         merged.pop(0)
 
     return [
-        KeySection(
-            start=run.first_window * CHROMA_WINDOW_SECONDS,
-            tonic_pc=run.best.tonic_pc,
-            mode=run.best.mode,
-            score=float(np.mean(run.scores)),
+        _section(
+            run.first_window * CHROMA_WINDOW_SECONDS,
+            run.best,
+            float(np.mean(run.scores)),
+            [np.asarray(w, dtype=float) for w in windows[run.first_window :][: run.windows]],
         )
         for run in merged
     ]

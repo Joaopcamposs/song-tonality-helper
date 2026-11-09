@@ -54,7 +54,7 @@ O app usa só a numeração padrão (a do librosa): o dó central é C4. A lista
 ### Limites
 
 - O método não separa a voz dos instrumentos: acordeão, segundas vozes e instrumentos agudos podem aparecer como notas altas. Por isso o relatório mostra o ranking das notas, e a nota mais aguda é a mais alta que aparece em pelo menos 100 quadros (cerca de 2,3 s no total).
-- O tom é detectado por estatística (correlação do chroma com os perfis de Krumhansl) e pode errar, principalmente entre relativos maior/menor ou em trechos curtos de modulação (modulações são detectadas por janelas de 10 s e a de uma janela só é ignorada). O deslocamento em semitons não depende dele; só o nome do novo tom.
+- O tom é detectado por estatística (correlação do chroma com os perfis de Krumhansl) e pode errar, principalmente entre relativos maior/menor (quando o relativo fica quase tão provável, a tela mostra "Também pode ser ...") ou em trechos curtos de modulação (modulações são detectadas por janelas de 10 s e a de uma janela só é ignorada). O deslocamento em semitons não depende dele; só o nome do novo tom.
 - Do seu computador o YouTube costuma liberar o download. Em servidores na nuvem ele bloqueia com frequência, exigindo cookies do navegador, o que é frágil. Por isso o deploy é opcional.
 
 Resultado de referência (aceite): "Dois Passarinhos" (Alan e Aladim), teto F#4 → nota mais aguda B4, tom G maior, -5 semitons, novo tom D maior; o topo cai em F#4.

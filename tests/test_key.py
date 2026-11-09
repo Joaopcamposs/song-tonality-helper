@@ -58,3 +58,19 @@ def test_unclear_windows_keep_the_previous_key():
 
 def test_all_unclear_still_returns_one_section():
     assert len(key_sections([[0.1] * 12] * 3)) == 1
+
+
+def test_relative_shown_when_close():
+    # Escala de C com ênfase em A, E e C: Lá menor e Dó maior ficam próximos.
+    windows = [_chroma_for({9: 1.0, 0: 0.9, 4: 0.9, 2: 0.7, 11: 0.7, 5: 0.5, 7: 0.5})] * 3
+    section = key_sections(windows)[0]
+    relative = section.relative
+    assert relative is not None
+    pair = {(section.tonic_pc, section.mode), (relative.tonic_pc, relative.mode)}
+    assert pair == {(0, "maior"), (9, "menor")}
+
+
+def test_relative_hidden_when_clear():
+    # Uma tríade maior bem definida não deixa o relativo perto.
+    section = key_sections([_window_in(4)] * 3)[0]
+    assert section.relative is None
