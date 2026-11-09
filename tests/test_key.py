@@ -74,3 +74,12 @@ def test_relative_hidden_when_clear():
     # Uma tríade maior bem definida não deixa o relativo perto.
     section = key_sections([_window_in(4)] * 3)[0]
     assert section.relative is None
+
+
+def test_tie_goes_to_the_relative_with_the_stronger_dominant():
+    # Mesmas notas de C/Lá menor: com E (dominante de Lá) bem acima de G, vence Lá menor.
+    base = {0: 1.0, 9: 0.9, 2: 0.7, 11: 0.7, 5: 0.5}
+    a_minor = key_sections([_chroma_for({**base, 4: 1.0, 7: 0.5})] * 3)[0]
+    c_major = key_sections([_chroma_for({**base, 4: 0.5, 7: 1.0})] * 3)[0]
+    assert (a_minor.tonic_pc, a_minor.mode) == (9, "menor")
+    assert (c_major.tonic_pc, c_major.mode) == (0, "maior")

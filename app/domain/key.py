@@ -13,6 +13,7 @@ _MINOR = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3
 
 MIN_SCORE = 0.5  # janela com correlação menor que isso (silêncio, ruído) não decide o tom
 MIN_SECTION_WINDOWS = 2  # trecho menor que isso é empréstimo de acorde, não modulação
+DOMINANT_MARGIN = 0.15  # dominante do relativo precisa ser 15% mais forte para ele vencer o empate
 MAX_RELATIVE_GAP = 0.2  # o relativo só vira alternativa se ficar a no máximo isso do tom escolhido
 
 
@@ -82,9 +83,15 @@ def _section(
     """Monta o trecho; guarda o relativo se, nas mesmas janelas, ele ficar perto do tom."""
     tonic_pc, mode = _relative(key)
     relative_score = float(np.mean([_score(p, tonic_pc, mode) for p in profiles]))
-    close = score - relative_score <= MAX_RELATIVE_GAP
-    relative = KeyCandidate(tonic_pc, mode, relative_score) if close else None
-    return KeySection(start, key.tonic_pc, key.mode, score, relative)
+    if score - relative_score > MAX_RELATIVE_GAP:
+        return KeySection(start, key.tonic_pc, key.mode, score)
+    mean = np.mean(profiles, axis=0)  # empate: vence o tom cuja dominante (quinta) soa mais forte
+    if mean[(tonic_pc + 7) % 12] > mean[(key.tonic_pc + 7) % 12] * (1 + DOMINANT_MARGIN):
+        chosen = KeyCandidate(key.tonic_pc, key.mode, score)
+        return KeySection(start, tonic_pc, mode, relative_score, chosen)
+    return KeySection(
+        start, key.tonic_pc, key.mode, score, KeyCandidate(tonic_pc, mode, relative_score)
+    )
 
 
 def key_sections(windows: Sequence[Sequence[float]]) -> list[KeySection]:
@@ -125,7 +132,7 @@ def key_sections(windows: Sequence[Sequence[float]]) -> list[KeySection]:
         merged[1].windows += merged[0].windows
         merged.pop(0)
 
-    return [
+    sections = [
         _section(
             run.first_window * CHROMA_WINDOW_SECONDS,
             run.best,
@@ -134,3 +141,9 @@ def key_sections(windows: Sequence[Sequence[float]]) -> list[KeySection]:
         )
         for run in merged
     ]
+    # O desempate pode igualar vizinhos (C e Lá menor viram Lá menor): não é modulação.
+    unique = [sections[0]]
+    for section in sections[1:]:
+        if (section.tonic_pc, section.mode) != (unique[-1].tonic_pc, unique[-1].mode):
+            unique.append(section)
+    return unique
