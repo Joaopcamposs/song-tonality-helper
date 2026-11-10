@@ -18,7 +18,7 @@ from app.domain.errors import DomainError
 from app.domain.features import ALGO_VERSION, AudioFeatures
 
 # Schema próprio no Postgres, para dividir o banco com outros apps.
-SCHEMA = "song-tonality-helper"
+SCHEMA = "tonalidade"
 
 
 class Base(DeclarativeBase):

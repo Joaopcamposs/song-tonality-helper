@@ -1,6 +1,6 @@
 # Persistência das análises — design
 
-Complementa `2026-10-22-song-tonality-helper-design.md` (V0). Onde houver conflito, este documento vale para persistência, API de análises e front da lista.
+Complementa `2026-10-22-tonalidade-design.md` (V0). Onde houver conflito, este documento vale para persistência, API de análises e front da lista.
 
 ## Intenção
 Guardar cada análise para (1) não refazer download e análise quando o mesmo vídeo voltar, (2) regerar o relatório a qualquer hora com **outro tom teto**, sem rede, e (3) manter uma lista das músicas já analisadas.

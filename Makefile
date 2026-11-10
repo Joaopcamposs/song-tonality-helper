@@ -2,15 +2,15 @@
 .PHONY: db run worker worker-remote worker-remote-logs worker-remote-down test ruff ty up down build-up deploy
 
 # Postgres local do compose (porta 5432). Sobrescreva no ambiente para usar outro banco.
-export DATABASE_URL ?= postgresql+asyncpg://postgres:dev@localhost:5432/song_tonality
+export DATABASE_URL ?= postgresql+asyncpg://postgres:dev@localhost:5432/tonalidade
 # Banco separado para os testes, porque a fixture apaga o schema a cada teste.
-export TEST_DATABASE_URL ?= postgresql+asyncpg://postgres:dev@localhost:5432/song_tonality_test
+export TEST_DATABASE_URL ?= postgresql+asyncpg://postgres:dev@localhost:5432/tonalidade_test
 UV_RUN = uv run
 
 # Sobe só o Postgres do compose e garante o banco de testes (idempotente).
 db:
 	docker compose up -d --wait db
-	docker compose exec -T db psql -U postgres -tc "SELECT 1 FROM pg_database WHERE datname='song_tonality_test'" | grep -q 1 || docker compose exec -T db createdb -U postgres song_tonality_test
+	docker compose exec -T db psql -U postgres -tc "SELECT 1 FROM pg_database WHERE datname='tonalidade_test'" | grep -q 1 || docker compose exec -T db createdb -U postgres tonalidade_test
 
 # Sobe a API local com recarga automática (http://localhost:8007).
 run: db

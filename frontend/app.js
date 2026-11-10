@@ -1,4 +1,4 @@
-// Front do Song Tonality Helper: envia o link, acompanha a análise, lista o histórico e desenha o relatório.
+// Front do Tonalidade: envia o link, acompanha a análise, lista o histórico e desenha o relatório.
 // Todo dado vindo da API entra na página por textContent, nunca por innerHTML.
 
 const CEILING_KEY = "ceilingMidi";

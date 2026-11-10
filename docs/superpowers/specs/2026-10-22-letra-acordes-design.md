@@ -1,4 +1,4 @@
-# Song Tonality Helper — design da tessitura, acordes e letra
+# Tonalidade — design da tessitura, acordes e letra
 
 ## Intenção
 Hoje o relatório diz o tom e onde fica a nota mais aguda, mas quem canta e toca precisa saber **o que está acontecendo naquele ponto**: a letra, o acorde e a nota, no tom original e no tom em que vai cantar. Também precisa saber **onde a melodia mais fica**, não só o pico: no caso de "Saudade Bandida" o usuário canta em A (−9) e o pico (C#4) cai bem abaixo do teto (F#4), porque o conforto vem de onde a melodia passa a maior parte do tempo.

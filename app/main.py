@@ -22,7 +22,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
 
 app = FastAPI(
     lifespan=lifespan,
-    title="Song Tonality Helper",
+    title="Tonalidade",
     description="Descobre o tom ideal de uma música do YouTube para o seu tom teto.",
 )
 

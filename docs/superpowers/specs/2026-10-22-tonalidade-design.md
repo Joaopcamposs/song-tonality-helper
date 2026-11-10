@@ -1,4 +1,4 @@
-# Song Tonality Helper — design da V0
+# Tonalidade — design da V0
 
 ## Intenção
 Ferramenta pessoal de estudo musical. O usuário cola o link de uma música do YouTube e escolhe o seu **tom teto** (a nota mais aguda que consegue cantar com estabilidade). O app descobre sozinho a nota mais aguda da melodia e o tom original, e devolve um relatório com o tom ao qual a música deve ser transposta para que o topo caia no teto. Hoje isso é feito à mão, com piano ou app de piano.

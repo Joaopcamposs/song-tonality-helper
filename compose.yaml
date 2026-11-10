@@ -7,13 +7,13 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev}
-      POSTGRES_DB: song_tonality
+      POSTGRES_DB: tonalidade
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - song-tonality-db:/var/lib/postgresql/data
+      - tonalidade-db:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d song_tonality"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tonalidade"]
       interval: 3s
       timeout: 3s
       retries: 20
@@ -27,7 +27,7 @@ services:
     # Palavra secreta da API (vazia = sem proteção); o banco é sempre o Postgres deste compose.
     environment:
       APP_PASSPHRASE: ${APP_PASSPHRASE:-}
-      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-dev}@db:5432/song_tonality
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-dev}@db:5432/tonalidade
     depends_on:
       db:
         condition: service_healthy
@@ -38,7 +38,7 @@ services:
     restart: unless-stopped
     command: python -m app.worker
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-dev}@db:5432/song_tonality
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-dev}@db:5432/tonalidade
     depends_on:
       db:
         condition: service_healthy
@@ -53,4 +53,4 @@ services:
     env_file: .env
 
 volumes:
-  song-tonality-db:
+  tonalidade-db:

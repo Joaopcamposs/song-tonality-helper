@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.services import ratelimit, store
 
 SAMPLE_RATE = 22050
-DEFAULT_TEST_URL = "postgresql+asyncpg://postgres:dev@localhost:5432/song_tonality_test"
+DEFAULT_TEST_URL = "postgresql+asyncpg://postgres:dev@localhost:5432/tonalidade_test"
 
 
 @pytest.fixture

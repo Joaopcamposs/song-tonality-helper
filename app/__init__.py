@@ -1,1 +1,1 @@
-"""Pacote da aplicação Song Tonality Helper."""
+"""Pacote da aplicação Tonalidade."""

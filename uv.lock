@@ -1300,7 +1300,7 @@ wheels = [
 ]
 
 [[package]]
-name = "song-tonality-helper"
+name = "tonalidade"
 version = "0.2.0"
 source = { virtual = "." }
 dependencies = [
