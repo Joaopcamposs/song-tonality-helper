@@ -45,7 +45,13 @@ p { margin: 0; }
 [hidden] { display: none !important; }
 
 .top, main { max-width: 640px; margin: 0 auto; padding-left: 16px; padding-right: 16px; }
-.top { padding-top: 14px; padding-bottom: 6px; }
+.top { padding-top: 14px; padding-bottom: 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.account { display: flex; align-items: center; gap: 10px; }
+.account .hint { margin: 0; }
+.tabs { display: flex; gap: 8px; }
+.tabs button { flex: 1; }
+.tabs button[aria-selected="true"] { border-color: var(--accent); color: var(--accent); }
+[hidden] { display: none !important; }
 main { padding-top: 10px; padding-bottom: 40px; }
 
 /* Marca */

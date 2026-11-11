@@ -1,9 +1,6 @@
 // Front do Tonalidade: envia o link, acompanha a análise, lista o histórico e desenha o relatório.
 // Todo dado vindo da API entra na página por textContent, nunca por innerHTML.
 
-const CEILING_KEY = "ceilingMidi";
-const PASSPHRASE_KEY = "passphrase";
-const PASSPHRASE_HEADER = "X-App-Passphrase";
 const POLL_MS = 2000;
 const HISTORY_POLL_MS = 10000;
 const HISTORY_MAX_FAILURES = 3;
@@ -38,29 +35,22 @@ const jobsBox = document.getElementById("jobs");
 const jobsList = document.getElementById("jobs-list");
 const historyRefresh = document.getElementById("history-refresh");
 const appBox = document.getElementById("app");
-const gate = document.getElementById("gate");
-const gateForm = document.getElementById("gate-form");
-const gateInput = document.getElementById("gate-input");
-const gateMessage = document.getElementById("gate-message");
+const authBox = document.getElementById("auth");
+const authForm = document.getElementById("auth-form");
+const authTabs = document.getElementById("auth-tabs");
+const authTitle = document.getElementById("auth-title");
+const authName = document.getElementById("auth-name");
+const authEmail = document.getElementById("auth-email");
+const authPassword = document.getElementById("auth-password");
+const authConfirm = document.getElementById("auth-confirm");
+const authMessage = document.getElementById("auth-message");
+const authSubmit = document.getElementById("auth-submit");
+const authLink = document.getElementById("auth-link");
+const userName = document.getElementById("user-name");
+const logoutButton = document.getElementById("logout");
 
 let currentVideoId = null;
 let activeRun = 0; // cada ação do usuário abre uma execução nova; as anteriores desistem de atualizar a tela
-
-function readSavedCeiling() {
-  try {
-    return localStorage.getItem(CEILING_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function saveCeiling(midi) {
-  try {
-    localStorage.setItem(CEILING_KEY, midi);
-  } catch {
-    // Sem armazenamento: a escolha só vale nesta visita.
-  }
-}
 
 function readSavedExtractNow() {
   try {
@@ -83,88 +73,225 @@ function showExtractLabel() {
   extractNowText.textContent = EXTRACT_LABEL[extractNow.checked];
 }
 
-function readSavedPassphrase() {
-  try {
-    return localStorage.getItem(PASSPHRASE_KEY) ?? "";
-  } catch {
-    return "";
+// Telas da conta: cada modo mostra só os campos que usa (data-modes) e o texto do botão.
+const AUTH_MODES = {
+  login: { title: "Entre com a sua conta.", submit: "Entrar", link: "Esqueci a senha", other: "forgot" },
+  register: { title: "Crie uma conta para guardar as suas músicas e o seu tom teto.", submit: "Criar conta", link: "", other: "" },
+  forgot: { title: "Informe o e-mail da conta e enviaremos um link para criar uma nova senha.", submit: "Enviar link", link: "Voltar", other: "login" },
+  reset: { title: "Escolha a nova senha.", submit: "Salvar senha", link: "", other: "" },
+  verify: { title: "Confirmando o e-mail...", submit: "Entrar", link: "", other: "" },
+};
+let authMode = "login";
+let authToken = ""; // token de ?verificar= ou ?redefinir=, só em memória
+
+// Mensagem de erro da API: `detail` vem como texto, ou como lista nos 422.
+function errorText(body, fallback) {
+  if (typeof body.detail === "string") return body.detail;
+  if (Array.isArray(body.detail) && body.detail.length > 0) return "Confira os dados informados.";
+  return fallback;
+}
+
+function showAuthMessage(text, ok = false) {
+  authMessage.textContent = text;
+  authMessage.className = ok ? "banner notice" : "banner error";
+  authMessage.hidden = text === "";
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  const config = AUTH_MODES[mode];
+  authTitle.textContent = config.title;
+  authSubmit.textContent = config.submit;
+  authSubmit.hidden = mode === "verify";
+  authLink.textContent = config.link;
+  authLink.hidden = config.link === "";
+  for (const label of authForm.querySelectorAll("[data-modes]")) {
+    label.hidden = !label.dataset.modes.split(" ").includes(mode);
   }
-}
-
-function savePassphrase(value) {
-  try {
-    if (value) localStorage.setItem(PASSPHRASE_KEY, value);
-    else localStorage.removeItem(PASSPHRASE_KEY);
-  } catch {
-    // Sem armazenamento: a palavra só vale até fechar a página.
+  authTabs.hidden = mode === "forgot" || mode === "reset" || mode === "verify";
+  for (const tab of authTabs.querySelectorAll("button")) {
+    tab.setAttribute("aria-selected", String(tab.dataset.mode === mode));
   }
+  authPassword.autocomplete = mode === "login" ? "current-password" : "new-password";
+  showAuthMessage("");
 }
 
-let passphrase = readSavedPassphrase();
-let passphraseAsk = null; // pedido de palavra em andamento, compartilhado pelas chamadas simultâneas
-
-// Mostra a tela só com o campo da palavra secreta e devolve o que a pessoa digitar.
-function askPassphrase(message) {
-  if (passphraseAsk) return passphraseAsk;
-  passphraseAsk = new Promise((resolve) => {
-    lock();
-    gateMessage.textContent = message;
-    gateInput.value = "";
-    gateInput.focus();
-    gateForm.addEventListener(
-      "submit",
-      (event) => {
-        event.preventDefault();
-        passphraseAsk = null;
-        resolve(gateInput.value);
-      },
-      { once: true },
-    );
-  });
-  return passphraseAsk;
-}
-
-// Esconde o app (hidden + inert: fora do foco e dos leitores de tela) e mostra só a palavra secreta.
-function lock() {
+// Esconde o app (hidden + inert: fora do foco e dos leitores de tela) e mostra a tela de entrada.
+function showAuth(mode = "login") {
   appBox.hidden = true;
   appBox.inert = true;
-  gate.hidden = false;
+  authBox.hidden = false;
   document.body.classList.add("locked");
+  userName.textContent = "";
+  authPassword.value = "";
+  authConfirm.value = "";
+  setAuthMode(mode);
 }
 
-// Primeira chamada aceita: revela o app e some com a tela da palavra.
-function unlock() {
+// Sessão válida: revela o app e some com a tela de entrada.
+function showApp(user) {
+  userName.textContent = user.name;
   if (!appBox.hidden) return;
-  gate.hidden = true;
+  authBox.hidden = true;
   appBox.hidden = false;
   appBox.inert = false;
   document.body.classList.remove("locked");
 }
 
-// fetch da API: manda a palavra secreta guardada e, se a API recusar (401), pede de novo e reenvia.
+// Limpa o que a sessão anterior deixou na tela (outra pessoa pode entrar em seguida).
+function resetScreen() {
+  activeRun++;
+  currentVideoId = null;
+  historyKey = null;
+  jobsKey = null;
+  historyFailures = 0;
+  reportBox.hidden = true;
+  noticeBox.hidden = true;
+  statusBox.hidden = true;
+  errorBox.hidden = true;
+  jobsBox.hidden = true;
+  historyList.replaceChildren();
+  jobsList.replaceChildren();
+  ceilingSelect.replaceChildren();
+  urlInput.value = "";
+}
+
+// fetch da API: um 401 (sessão ausente ou vencida) devolve a pessoa para a tela de entrada.
 async function api(url, options = {}) {
-  for (;;) {
-    const sent = passphrase;
-    const headers = { ...options.headers };
-    if (passphrase) headers[PASSPHRASE_HEADER] = passphrase;
-    let response;
-    try {
-      response = await fetch(url, { ...options, headers });
-    } catch (error) {
-      unlock(); // sem rede: mostra o app com o erro, nunca uma tela vazia
-      throw error;
-    }
-    if (response.status !== 401) {
-      unlock(); // qualquer resposta que não seja 401 mostra o app (erros aparecem nos avisos)
-      return response;
-    }
-    if (passphrase !== sent) continue; // outra chamada já trocou a palavra: só reenvia
-    const message = passphrase ? "Palavra secreta recusada. Digite de novo:" : "Digite a palavra secreta:";
-    passphrase = "";
-    savePassphrase("");
-    passphrase = await askPassphrase(message);
-    savePassphrase(passphrase);
+  const response = await fetch(url, options);
+  if (response.status === 401 && !appBox.hidden) {
+    resetScreen();
+    showAuth("login");
+    showAuthMessage("Sua sessão acabou. Entre de novo.");
   }
+  return response;
+}
+
+async function authRequest(path, payload) {
+  return fetch(`/api/auth/${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+async function submitAuth(event) {
+  event.preventDefault();
+  const email = authEmail.value.trim();
+  const needsConfirm = authMode === "register" || authMode === "reset";
+  if (needsConfirm && authPassword.value !== authConfirm.value) {
+    showAuthMessage("As senhas não são iguais.");
+    return;
+  }
+  authSubmit.disabled = true;
+  try {
+    let response;
+    if (authMode === "login") {
+      response = await authRequest("login", { email, password: authPassword.value });
+    } else if (authMode === "register") {
+      response = await authRequest("register", { name: authName.value.trim(), email, password: authPassword.value });
+    } else if (authMode === "forgot") {
+      response = await authRequest("forgot-password", { email });
+    } else {
+      response = await authRequest("reset-password", { token: authToken, password: authPassword.value });
+    }
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      showAuthMessage(errorText(body, "Não foi possível concluir. Tente de novo."));
+      return;
+    }
+    if (authMode === "register") {
+      // o cadastro não abre sessão: entra em seguida com os mesmos dados
+      response = await authRequest("login", { email, password: authPassword.value });
+      if (!response.ok) {
+        setAuthMode("login");
+        showAuthMessage("Conta criada. Entre com o e-mail e a senha.", true);
+        return;
+      }
+    }
+    if (authMode === "forgot") {
+      showAuthMessage("Se o e-mail tiver conta, o link já está a caminho.", true);
+    } else if (authMode === "reset") {
+      authToken = "";
+      setAuthMode("login");
+      showAuthMessage("Senha trocada. Entre com a nova senha.", true);
+    } else {
+      // login (ou cadastro seguido de login): o cookie de sessão já foi gravado, então busca o usuário e abre o app
+      await start();
+    }
+  } catch {
+    showAuthMessage("Sem conexão com o servidor.");
+  } finally {
+    authSubmit.disabled = false;
+  }
+}
+
+async function logout() {
+  await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+  resetScreen();
+  showAuth("login");
+}
+
+// Monta o seletor de teto e marca o que está salvo no servidor.
+async function loadCeilings() {
+  const [options, settings] = await Promise.all([api("/api/ceilings"), api("/api/me/settings")]);
+  if (!options.ok || !settings.ok) throw new Error("ceilings");
+  const data = await options.json();
+  const saved = (await settings.json()).ceiling_midi;
+  ceilingSelect.replaceChildren();
+  for (const option of data.options) {
+    const node = el("option", option.name);
+    node.value = option.midi;
+    node.selected = option.midi === saved;
+    ceilingSelect.append(node);
+  }
+}
+
+// Abre o app se já há sessão; senão mostra a tela de entrada.
+async function start() {
+  let response;
+  try {
+    response = await fetch("/api/auth/me");
+  } catch {
+    showAuth("login");
+    showAuthMessage("Sem conexão com o servidor.");
+    return;
+  }
+  if (!response.ok) {
+    showAuth("login");
+    return;
+  }
+  resetScreen();
+  showApp(await response.json());
+  loadCeilings().catch(() => showError("Não consegui carregar a lista de tetos."));
+  refreshHistory({ manual: true });
+}
+
+// Links do e-mail: ?verificar=<token> confirma o endereço, ?redefinir=<token> abre a nova senha.
+async function openEmailLink() {
+  const params = new URLSearchParams(location.search);
+  const verify = params.get("verificar");
+  const reset = params.get("redefinir");
+  if (!verify && !reset) return false;
+  history.replaceState(null, "", location.pathname); // o token não fica na barra de endereço
+  if (reset) {
+    authToken = reset;
+    showAuth("reset");
+    return true;
+  }
+  showAuth("verify");
+  try {
+    const response = await authRequest("verify-email", { token: verify });
+    if (response.ok) showAuthMessage("E-mail confirmado. Agora é só entrar.", true);
+    else showAuthMessage("Link inválido ou vencido.");
+  } catch {
+    showAuthMessage("Sem conexão com o servidor.");
+  }
+  authTitle.textContent = "";
+  authSubmit.hidden = false;
+  authLink.hidden = false;
+  authLink.textContent = "Ir para a entrada";
+  return true;
 }
 
 function el(tag, text, className) {
@@ -186,20 +313,6 @@ function clock(seconds) {
 
 function signed(n) {
   return n > 0 ? `+${n}` : String(n);
-}
-
-async function loadCeilings() {
-  const response = await api("/api/ceilings");
-  if (!response.ok) throw new Error("ceilings");
-  const data = await response.json();
-  const saved = Number(readSavedCeiling());
-  const wanted = data.options.some((o) => o.midi === saved) ? saved : data.default_midi;
-  for (const option of data.options) {
-    const node = el("option", option.name);
-    node.value = option.midi;
-    node.selected = option.midi === wanted;
-    ceilingSelect.append(node);
-  }
 }
 
 function showError(message) {
@@ -531,8 +644,19 @@ async function analyze(event) {
   }
 }
 
-function onCeilingChange() {
-  saveCeiling(ceilingSelect.value);
+// Salva o teto no servidor e refaz o relatório aberto com as features que ele já tem.
+async function onCeilingChange() {
+  const midi = Number(ceilingSelect.value);
+  try {
+    const response = await api("/api/me/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ceiling_midi: midi }),
+    });
+    if (!response.ok) throw new Error("settings");
+  } catch {
+    showError("Não consegui salvar o teto; ele vale só nesta tela.");
+  }
   if (currentVideoId && !reportBox.hidden) {
     loadReport(currentVideoId).catch((error) => showError(error.message));
   }
@@ -546,8 +670,19 @@ extractNow.addEventListener("change", () => {
 });
 ceilingSelect.addEventListener("change", onCeilingChange);
 form.addEventListener("submit", analyze);
-loadCeilings().catch(() => showError("Não consegui carregar a lista de tetos."));
-refreshHistory({ manual: true });
+authForm.addEventListener("submit", submitAuth);
+authTabs.addEventListener("click", (event) => {
+  const tab = event.target.closest("button[data-mode]");
+  if (tab) setAuthMode(tab.dataset.mode);
+});
+authLink.addEventListener("click", () => {
+  if (authMode === "verify") start(); // abre o app se já há sessão, senão a tela de entrada
+  else setAuthMode(AUTH_MODES[authMode].other || "login");
+});
+logoutButton.addEventListener("click", logout);
+openEmailLink().then((handled) => {
+  if (!handled) start();
+});
 historyRefresh.addEventListener("click", () => refreshHistory({ manual: true }));
 setInterval(pollHistory, HISTORY_POLL_MS);
 document.addEventListener("visibilitychange", () => {
