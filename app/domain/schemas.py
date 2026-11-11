@@ -1,9 +1,10 @@
 """Modelos Pydantic da API: pedido de análise, andamento, lista e relatório."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
+from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, EmailStr, Field
 
 
 class NoteOut(BaseModel):
@@ -109,3 +110,58 @@ class CeilingsOut(BaseModel):
 
     options: list[CeilingOut]
     default_midi: int
+
+
+def _check_password(password: str) -> str:
+    """Aceita senhas de 8 caracteres até 72 bytes (limite do bcrypt)."""
+    if len(password) < 8:
+        raise ValueError("A senha precisa ter pelo menos 8 caracteres.")
+    if len(password.encode()) > 72:
+        raise ValueError("A senha pode ter no máximo 72 bytes.")
+    return password
+
+
+Password = Annotated[str, AfterValidator(_check_password)]
+
+
+class RegisterRequest(BaseModel):
+    """Cadastro de uma conta nova."""
+
+    name: str = Field(min_length=1, max_length=80)
+    email: EmailStr
+    password: Password
+
+
+class LoginRequest(BaseModel):
+    """Entrada com e-mail e senha."""
+
+    email: EmailStr
+    password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Pedido do link para redefinir a senha."""
+
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Nova senha, com o token recebido por e-mail."""
+
+    token: str
+    password: Password
+
+
+class TokenRequest(BaseModel):
+    """Token recebido por e-mail (confirmação de endereço)."""
+
+    token: str
+
+
+class UserRead(BaseModel):
+    """A pessoa logada, sem dados sensíveis."""
+
+    id: UUID
+    name: str
+    email: str
+    email_verified: bool

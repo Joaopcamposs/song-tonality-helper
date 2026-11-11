@@ -24,3 +24,15 @@ class VideoTooLongError(DomainError):
 
 class DownloadError(DomainError):
     """Falha ao baixar ou converter o áudio."""
+
+
+class EmailAlreadyRegistered(DomainError):
+    """Já existe uma conta com esse e-mail."""
+
+
+class InvalidCredentials(DomainError):
+    """E-mail ou senha incorretos (mensagem única, para não revelar quais e-mails existem)."""
+
+
+class InvalidAuthToken(DomainError):
+    """O link do e-mail é inválido, já foi usado ou venceu."""

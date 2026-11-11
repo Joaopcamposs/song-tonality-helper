@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.services import migrate, ratelimit, store
 
 # Segredo fixo só para os testes; a API exige `SECRET_KEY` ao subir.
-os.environ.setdefault("SECRET_KEY", "segredo-de-teste")
+os.environ.setdefault("SECRET_KEY", "segredo-de-teste-com-mais-de-32-bytes-ok")
 
 SAMPLE_RATE = 22050
 DEFAULT_TEST_URL = "postgresql+asyncpg://postgres:dev@localhost:5432/tonalidade_test"
