@@ -1,5 +1,7 @@
 # Login, conta e dados por usuário — design
 
+**Status:** implementado (2026-11-11), exceto o deploy em produção.
+
 Complementa `2026-10-22-tonalidade-design.md` (V0) e `2026-10-22-persistencia-design.md`. A absorção futura pelo repertorio está em `2026-11-11-absorcao-pelo-repertorio-plano.md`; este design foi feito para ela ser simples.
 
 ## Intenção

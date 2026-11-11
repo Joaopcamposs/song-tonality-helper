@@ -24,9 +24,13 @@ services:
     # Só a máquina local acessa direto.
     ports:
       - "127.0.0.1:8007:8000"
-    # Palavra secreta da API (vazia = sem proteção); o banco é sempre o Postgres deste compose.
+    # Sessão e e-mails da API; o banco é sempre o Postgres deste compose.
     environment:
-      APP_PASSPHRASE: ${APP_PASSPHRASE:-}
+      SECRET_KEY: ${SECRET_KEY:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      APP_URL: ${APP_URL:-http://localhost:8007}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-}
       DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-dev}@db:5432/tonalidade
     depends_on:
       db:
