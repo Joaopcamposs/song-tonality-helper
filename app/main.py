@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.domain import security
-from app.routers import analyses
+from app.routers import analyses, auth
 from app.services import migrate, store
 
 
@@ -31,6 +31,7 @@ app = FastAPI(
     description="Descobre o tom ideal de uma música do YouTube para o seu tom teto.",
 )
 
+app.include_router(auth.router)
 app.include_router(analyses.router)
 
 
