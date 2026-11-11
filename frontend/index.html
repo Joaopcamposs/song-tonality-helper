@@ -21,36 +21,43 @@
   <link rel="icon" href="/brand/logo.svg" type="image/svg+xml">
   <link rel="icon" href="/brand/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=10">
 </head>
 <body class="locked">
-  <section id="auth" class="gate" hidden>
-    <form id="auth-form" class="panel stack" novalidate>
-      <div class="gate-brand">
-        <img class="pick-logo" src="brand/logo.svg" alt="">
-        <span class="brand-name">Tonalidade</span>
-      </div>
+  <section id="auth" class="auth" hidden>
+    <div class="auth-brand">
+      <img class="pick-logo xl" src="brand/logo.svg" alt="" width="112" height="112">
+      <h1>Tonalidade</h1>
+      <p class="lead">Em que tom você canta essa música?</p>
+    </div>
+
+    <div class="auth-card">
       <div id="auth-tabs" class="tabs" role="tablist">
-        <button id="tab-login" class="small" type="button" role="tab" data-mode="login">Entrar</button>
-        <button id="tab-register" class="small" type="button" role="tab" data-mode="register">Criar conta</button>
+        <button id="tab-login" class="tab" type="button" role="tab" data-mode="login">Entrar</button>
+        <button id="tab-register" class="tab" type="button" role="tab" data-mode="register">Criar conta</button>
       </div>
-      <p id="auth-title" class="auth-title"></p>
-      <label data-modes="register">Nome
-        <input id="auth-name" type="text" maxlength="80" autocomplete="name">
-      </label>
-      <label data-modes="login register forgot">E-mail
-        <input id="auth-email" type="email" autocomplete="email">
-      </label>
-      <label data-modes="login register reset">Senha
-        <input id="auth-password" type="password" minlength="8" maxlength="72" autocomplete="current-password">
-      </label>
-      <label data-modes="register reset">Confirme a senha
-        <input id="auth-confirm" type="password" minlength="8" maxlength="72" autocomplete="new-password">
-      </label>
-      <p id="auth-message" class="banner" role="alert" hidden></p>
-      <button id="auth-submit" class="primary big" type="submit">Entrar</button>
-      <button id="auth-link" class="link-button" type="button"></button>
-    </form>
+      <form id="auth-form" class="stack" novalidate>
+        <p id="auth-title" class="muted"></p>
+        <label data-modes="register">Nome
+          <input id="auth-name" type="text" maxlength="80" autocomplete="name" placeholder="Como te chamam">
+        </label>
+        <label data-modes="login register forgot">E-mail
+          <input id="auth-email" type="email" autocomplete="email" placeholder="voce@email.com">
+        </label>
+        <label data-modes="login register reset">Senha
+          <span class="password">
+            <input id="auth-password" type="password" minlength="8" maxlength="72" autocomplete="current-password" placeholder="Mínimo de 8 caracteres">
+            <button id="toggle-password" type="button" class="ghost small" aria-label="Mostrar senha">Mostrar</button>
+          </span>
+        </label>
+        <label data-modes="register reset">Confirmar senha
+          <input id="auth-confirm" type="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="Repita a senha">
+        </label>
+        <p id="auth-message" class="banner" role="alert" hidden></p>
+        <button id="auth-submit" class="primary big" type="submit">Entrar</button>
+        <button id="auth-link" class="ghost small" type="button"></button>
+      </form>
+    </div>
   </section>
 
   <div id="app" hidden inert>
@@ -108,6 +115,6 @@
     </section>
   </main>
   </div>
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>

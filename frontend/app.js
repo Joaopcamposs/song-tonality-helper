@@ -47,6 +47,7 @@ const authMessage = document.getElementById("auth-message");
 const authSubmit = document.getElementById("auth-submit");
 const authLink = document.getElementById("auth-link");
 const userName = document.getElementById("user-name");
+const togglePassword = document.getElementById("toggle-password");
 const logoutButton = document.getElementById("logout");
 
 let currentVideoId = null;
@@ -680,6 +681,12 @@ authLink.addEventListener("click", () => {
   else setAuthMode(AUTH_MODES[authMode].other || "login");
 });
 logoutButton.addEventListener("click", logout);
+togglePassword.addEventListener("click", () => {
+  const show = authPassword.type === "password";
+  authPassword.type = show ? "text" : "password";
+  togglePassword.textContent = show ? "Ocultar" : "Mostrar";
+  togglePassword.setAttribute("aria-label", show ? "Ocultar senha" : "Mostrar senha");
+});
 openEmailLink().then((handled) => {
   if (!handled) start();
 });
