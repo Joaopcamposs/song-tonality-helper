@@ -37,16 +37,9 @@ async def test_save_overwrites_existing_video():
     async with store.session() as session:
         await store.save(session, "abc", "Antigo", 100, _features(71))
         await store.save(session, "abc", "Novo", 110, _features(72))
-        rows = await store.list_recent(session)
-    assert [(r.title, r.top_midi) for r in rows] == [("Novo", 72)]
-
-
-async def test_list_recent_is_newest_first():
-    async with store.session() as session:
-        for video_id in ("a", "b", "c"):
-            await store.save(session, video_id, video_id, 60, _features())
-        rows = await store.list_recent(session)
-    assert [r.video_id for r in rows] == ["c", "b", "a"]
+        row = await store.find(session, "abc")
+    assert row is not None
+    assert (row.title, row.top_midi) == ("Novo", 72)
 
 
 async def test_tables_live_in_own_schema_on_postgres():

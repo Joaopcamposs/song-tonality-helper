@@ -4,12 +4,9 @@ from pathlib import Path
 
 import httpx
 import pytest
-import pytest_asyncio
-from httpx import ASGITransport
 
 from app import worker
 from app.domain.features import AudioFeatures
-from app.main import app
 from app.services import jobs, store
 from app.services.download import DownloadedAudio
 
@@ -17,10 +14,9 @@ VIDEO_ID = "dQw4w9WgXcQ"
 URL = f"https://www.youtube.com/watch?v={VIDEO_ID}"
 
 
-@pytest_asyncio.fixture
-async def client():
-    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        yield c
+@pytest.fixture
+def client(logged_client: httpx.AsyncClient) -> httpx.AsyncClient:
+    return logged_client
 
 
 @pytest.fixture

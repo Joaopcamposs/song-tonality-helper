@@ -165,3 +165,15 @@ class UserRead(BaseModel):
     name: str
     email: str
     email_verified: bool
+
+
+class SettingsIn(BaseModel):
+    """Preferências da pessoa que podem ser trocadas."""
+
+    ceiling_midi: int = Field(ge=48, le=72)
+
+
+class SettingsOut(BaseModel):
+    """Preferências salvas da pessoa."""
+
+    ceiling_midi: int

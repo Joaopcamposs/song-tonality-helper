@@ -2,12 +2,13 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
 from sqlalchemy import CursorResult, and_, delete, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.store import Job, JobStatus
+from app.services.store import Job, JobStatus, UserAnalysis
 
 MAX_JOBS = 50
 # Job em curso sem sinal há tanto tempo foi abandonado (ex.: a API caiu). Fica logo acima do prazo
@@ -85,9 +86,14 @@ async def forget(session: AsyncSession, video_id: str) -> bool:
     return True
 
 
-async def list_all(session: AsyncSession) -> list[Job]:
-    """Jobs na fila, em curso ou com erro, dos mais recentes para os mais antigos."""
-    result = await session.scalars(select(Job).order_by(Job.updated_at.desc()))
+async def list_for_user(session: AsyncSession, user_id: UUID) -> list[Job]:
+    """Jobs na fila, em curso ou com erro das músicas da pessoa, dos mais recentes aos antigos."""
+    result = await session.scalars(
+        select(Job)
+        .join(UserAnalysis, UserAnalysis.video_id == Job.video_id)
+        .where(UserAnalysis.user_id == user_id)
+        .order_by(Job.updated_at.desc())
+    )
     return list(result)
 
 

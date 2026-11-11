@@ -3,8 +3,6 @@ from pathlib import Path
 
 import httpx
 import pytest
-import pytest_asyncio
-from httpx import ASGITransport
 from sqlalchemy import func, select
 
 from app import worker
@@ -42,10 +40,9 @@ def fake_pipeline(monkeypatch):
     monkeypatch.setattr(worker, "analyze_audio", lambda path: _features())
 
 
-@pytest_asyncio.fixture
-async def client():
-    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        yield c
+@pytest.fixture
+def client(logged_client: httpx.AsyncClient) -> httpx.AsyncClient:
+    return logged_client
 
 
 async def _post(client: httpx.AsyncClient, url: str = URL) -> httpx.Response:
@@ -310,14 +307,15 @@ async def test_delete_during_reanalysis_is_409_and_keeps_record(client):
     assert (await client.get("/api/analyses")).json()[0]["video_id"] == VIDEO_ID
 
 
-async def test_delete_then_analyze_again_downloads_again(client):
+async def test_delete_then_ask_again_relinks_without_downloading(client):
     await _analyze(client)
     await client.delete(f"/api/analyses/{VIDEO_ID}")
-    assert (await _analyze(client)).status_code == 202
-    assert len(downloads) == 2
+    assert (await _analyze(client)).status_code == 200
+    assert len(downloads) == 1
+    assert (await client.get(f"/api/analyses/{VIDEO_ID}")).json()["status"] == "done"
 
 
-async def test_rate_limit_blocks_new_jobs_per_ip_but_not_reuse(client, monkeypatch):
+async def test_rate_limit_blocks_new_jobs_per_user_but_not_reuse(client, monkeypatch):
     monkeypatch.setenv("MAX_REQUESTS_PER_HOUR", "2")
     assert (await _post(client, "https://youtu.be/aaaaaaaaaaa")).status_code == 202
     # Job já existente não conta nem é bloqueado.

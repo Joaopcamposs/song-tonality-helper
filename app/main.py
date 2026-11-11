@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.domain import security
-from app.routers import analyses, auth
+from app.routers import analyses, auth, me
 from app.services import migrate, store
 
 
@@ -32,6 +32,7 @@ app = FastAPI(
 )
 
 app.include_router(auth.router)
+app.include_router(me.router)
 app.include_router(analyses.router)
 
 

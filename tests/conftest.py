@@ -1,8 +1,9 @@
 import asyncio
 import os
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
 
+import httpx
 import numpy as np
 import pytest
 import pytest_asyncio
@@ -11,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from app.main import app
 from app.services import migrate, ratelimit, store
 
 # Segredo fixo só para os testes; a API exige `SECRET_KEY` ao subir.
@@ -85,3 +87,30 @@ async def db(migrated_database: None):
 def reset_rate_limit():
     """Zera os contadores do limite de pedidos entre os testes."""
     ratelimit.reset()
+
+
+@pytest_asyncio.fixture
+async def make_client() -> AsyncIterator[Callable[[str], Awaitable[httpx.AsyncClient]]]:
+    """Fábrica de clientes HTTP já cadastrados e logados com o e-mail informado."""
+    clients: list[httpx.AsyncClient] = []
+
+    async def build(email: str = "ana@x.com") -> httpx.AsyncClient:
+        http = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
+        clients.append(http)
+        credentials = {"email": email, "password": "segredo123"}
+        created = await http.post("/api/auth/register", json={"name": "Ana", **credentials})
+        assert created.status_code == 201
+        assert (await http.post("/api/auth/login", json=credentials)).status_code == 200
+        return http
+
+    yield build
+    for http in clients:
+        await http.aclose()
+
+
+@pytest_asyncio.fixture
+async def logged_client(
+    make_client: Callable[[str], Awaitable[httpx.AsyncClient]],
+) -> httpx.AsyncClient:
+    """Cliente HTTP de uma pessoa já logada."""
+    return await make_client("ana@x.com")

@@ -7,6 +7,7 @@ from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import JSON, ForeignKey, MetaData, String, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -17,6 +18,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.domain.errors import DomainError
 from app.domain.features import ALGO_VERSION, AudioFeatures
+from app.domain.notes import DEFAULT_CEILING_MIDI
 
 # Schema próprio no Postgres, para dividir o banco com outros apps.
 SCHEMA = "tonalidade"
@@ -178,22 +180,6 @@ async def save(
     return row
 
 
-async def remove(session: AsyncSession, video_id: str) -> bool:
-    """Apaga a análise do vídeo; devolve False se não havia registro."""
-    row = await session.get(Analysis, video_id)
-    if row is None:
-        return False
-    await session.delete(row)
-    await session.commit()
-    return True
-
-
-async def list_recent(session: AsyncSession) -> list[Analysis]:
-    """Todas as análises, das mais recentes para as mais antigas."""
-    result = await session.scalars(select(Analysis).order_by(Analysis.created_at.desc()))
-    return list(result)
-
-
 def to_features(row: Analysis) -> AudioFeatures:
     """Reconstrói as features guardadas para montar um relatório."""
     return AudioFeatures(
@@ -202,3 +188,65 @@ def to_features(row: Analysis) -> AudioFeatures:
         top_times=row.top_times,
         chroma_windows=row.chroma_windows,
     )
+
+
+def _now() -> datetime:
+    """Agora em UTC ingênuo, como as colunas de data."""
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
+async def link(session: AsyncSession, user_id: UUID, video_id: str) -> None:
+    """Põe a música na lista da pessoa; sem efeito se ela já estava lá."""
+    if await is_linked(session, user_id, video_id):
+        return
+    session.add(UserAnalysis(user_id=user_id, video_id=video_id, created_at=_now()))
+    try:
+        await session.commit()
+    except IntegrityError:  # dois pedidos simultâneos da mesma pessoa
+        await session.rollback()
+
+
+async def unlink(session: AsyncSession, user_id: UUID, video_id: str) -> bool:
+    """Tira a música da lista da pessoa (as features ficam); False se ela não estava lá."""
+    row = await session.get(UserAnalysis, (user_id, video_id))
+    if row is None:
+        return False
+    await session.delete(row)
+    await session.commit()
+    return True
+
+
+async def is_linked(session: AsyncSession, user_id: UUID, video_id: str) -> bool:
+    """Diz se a música está na lista da pessoa."""
+    return await session.get(UserAnalysis, (user_id, video_id)) is not None
+
+
+async def has_links(session: AsyncSession, video_id: str) -> bool:
+    """Diz se alguém ainda tem a música na lista."""
+    found = await session.scalar(
+        select(UserAnalysis.video_id).where(UserAnalysis.video_id == video_id)
+    )
+    return found is not None
+
+
+async def list_for_user(session: AsyncSession, user_id: UUID) -> list[Analysis]:
+    """Análises prontas da lista da pessoa, das mais recentemente pedidas para as mais antigas."""
+    result = await session.scalars(
+        select(Analysis)
+        .join(UserAnalysis, UserAnalysis.video_id == Analysis.video_id)
+        .where(UserAnalysis.user_id == user_id)
+        .order_by(UserAnalysis.created_at.desc())
+    )
+    return list(result)
+
+
+async def get_ceiling(session: AsyncSession, user_id: UUID) -> int:
+    """Tom teto salvo da pessoa, ou o padrão se ela ainda não escolheu."""
+    saved = await session.get(UserSettings, user_id)
+    return DEFAULT_CEILING_MIDI if saved is None else saved.ceiling_midi
+
+
+async def set_ceiling(session: AsyncSession, user_id: UUID, midi: int) -> None:
+    """Guarda o tom teto da pessoa."""
+    await session.merge(UserSettings(user_id=user_id, ceiling_midi=midi))
+    await session.commit()
