@@ -48,7 +48,9 @@ async def test_verify_email_flow(outbox):
         await account.send_verification(session, user)
         raw = link_token(outbox[0], "verificar")
         await account.verify_email(session, raw)
-        assert (await account.get_user(session, user.id)).email_verified_at is not None
+        fresh = await account.get_user(session, user.id)
+        assert fresh is not None
+        assert fresh.email_verified_at is not None
         with pytest.raises(InvalidAuthToken):  # uso único
             await account.verify_email(session, raw)
         with pytest.raises(InvalidAuthToken):  # inventado
