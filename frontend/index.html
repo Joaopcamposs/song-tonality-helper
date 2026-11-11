@@ -21,7 +21,7 @@
   <link rel="icon" href="/brand/logo.svg" type="image/svg+xml">
   <link rel="icon" href="/brand/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body class="locked">
   <section id="auth" class="gate" hidden>
@@ -34,7 +34,7 @@
         <button id="tab-login" class="small" type="button" role="tab" data-mode="login">Entrar</button>
         <button id="tab-register" class="small" type="button" role="tab" data-mode="register">Criar conta</button>
       </div>
-      <p id="auth-title" class="hint"></p>
+      <p id="auth-title" class="auth-title"></p>
       <label data-modes="register">Nome
         <input id="auth-name" type="text" maxlength="80" autocomplete="name">
       </label>
@@ -49,7 +49,7 @@
       </label>
       <p id="auth-message" class="banner" role="alert" hidden></p>
       <button id="auth-submit" class="primary big" type="submit">Entrar</button>
-      <button id="auth-link" class="small" type="button"></button>
+      <button id="auth-link" class="link-button" type="button"></button>
     </form>
   </section>
 
