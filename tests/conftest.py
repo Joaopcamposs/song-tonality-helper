@@ -1,3 +1,4 @@
+import asyncio
 import os
 from collections.abc import Callable
 from pathlib import Path
@@ -10,7 +11,10 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.services import ratelimit, store
+from app.services import migrate, ratelimit, store
+
+# Segredo fixo só para os testes; a API exige `SECRET_KEY` ao subir.
+os.environ.setdefault("SECRET_KEY", "segredo-de-teste")
 
 SAMPLE_RATE = 22050
 DEFAULT_TEST_URL = "postgresql+asyncpg://postgres:dev@localhost:5432/tonalidade_test"
@@ -41,20 +45,38 @@ def make_wav(tmp_path: Path) -> Callable[[list[tuple[int | None, float]]], Path]
     return build
 
 
-@pytest_asyncio.fixture(autouse=True)
-async def db():
-    """Banco novo para cada teste: apaga o schema do app no Postgres de `TEST_DATABASE_URL`."""
-    url = os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_URL)
-    cleaner = create_async_engine(url)
+TEST_URL = os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_URL)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def migrated_database() -> None:
+    """Recria o schema do app e aplica as migrações, uma vez por sessão de testes."""
+
+    async def drop_schema() -> None:
+        cleaner = create_async_engine(TEST_URL)
+        try:
+            async with cleaner.begin() as connection:
+                await connection.execute(text(f'DROP SCHEMA IF EXISTS "{store.SCHEMA}" CASCADE'))
+        finally:
+            await cleaner.dispose()
+
     try:
-        async with cleaner.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA IF EXISTS "{store.SCHEMA}" CASCADE'))
+        asyncio.run(drop_schema())
     except OSError, DBAPIError:
         pytest.exit("Postgres de testes inacessível: rode `make db` (ou defina TEST_DATABASE_URL).")
-    finally:
-        await cleaner.dispose()
-    store.configure(url)
-    await store.create_tables()
+    migrate.upgrade_head(TEST_URL)
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def db(migrated_database: None):
+    """Esvazia todas as tabelas do app antes de cada teste e aponta o store para o banco."""
+    store.configure(TEST_URL)
+    tables = ", ".join(
+        f'"{store.SCHEMA}"."{table.name}"' for table in store.Base.metadata.sorted_tables
+    )
+    async with store.session() as session:
+        await session.execute(text(f"TRUNCATE {tables}"))
+        await session.commit()
     yield
     await store.dispose()
 

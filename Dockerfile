@@ -12,6 +12,8 @@ WORKDIR /srv
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
+COPY alembic.ini ./alembic.ini
+COPY alembic ./alembic
 COPY app ./app
 COPY frontend ./frontend
 

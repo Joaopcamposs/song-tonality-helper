@@ -4,8 +4,9 @@ import os
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Literal
+from uuid import UUID
 
-from sqlalchemy import JSON, MetaData, String, select, text
+from sqlalchemy import JSON, ForeignKey, MetaData, String, select
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -57,6 +58,56 @@ class Job(Base):
     updated_at: Mapped[datetime]  # UTC ingênuo, como em Analysis
 
 
+class User(Base):
+    """Conta de uma pessoa (mesmas colunas da tabela `users` do repertorio)."""
+
+    __tablename__ = "users"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    name: Mapped[str]
+    email: Mapped[str] = mapped_column(unique=True)  # sempre em minúsculas
+    password_hash: Mapped[str]
+    created_at: Mapped[datetime]  # UTC ingênuo, como em Analysis
+    email_verified_at: Mapped[datetime | None]
+
+
+class AuthToken(Base):
+    """Token de uso único para confirmar o e-mail (`verify`) ou redefinir a senha (`reset`)."""
+
+    __tablename__ = "auth_tokens"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey(f"{SCHEMA}.users.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String)
+    token_hash: Mapped[str] = mapped_column(index=True)  # só o hash é guardado
+    expires_at: Mapped[datetime]
+    used_at: Mapped[datetime | None]
+    created_at: Mapped[datetime]
+
+
+class UserSettings(Base):
+    """Preferências de uma pessoa; sem linha vale o teto padrão."""
+
+    __tablename__ = "user_settings"
+
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.users.id", ondelete="CASCADE"), primary_key=True
+    )
+    ceiling_midi: Mapped[int]
+
+
+class UserAnalysis(Base):
+    """Liga uma pessoa às músicas que ela pediu (as features são compartilhadas)."""
+
+    __tablename__ = "user_analyses"
+
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.users.id", ondelete="CASCADE"), primary_key=True
+    )
+    video_id: Mapped[str] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime]
+
+
 _engine: AsyncEngine | None = None
 _sessions: async_sessionmaker[AsyncSession] | None = None
 
@@ -78,14 +129,6 @@ def configure(url: str) -> None:
     global _engine, _sessions
     _engine = create_async_engine(url)
     _sessions = async_sessionmaker(_engine, expire_on_commit=False)
-
-
-async def create_tables() -> None:
-    """Cria o schema e as tabelas que ainda não existem."""
-    assert _engine is not None, "store.configure() não foi chamado"
-    async with _engine.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{SCHEMA}"'))
-        await connection.run_sync(Base.metadata.create_all)
 
 
 async def dispose() -> None:

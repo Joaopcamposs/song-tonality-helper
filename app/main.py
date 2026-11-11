@@ -1,5 +1,6 @@
 """Aplicação FastAPI: expõe a API em /api e serve o front estático."""
 
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -7,15 +8,19 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from app.domain import security
 from app.routers import analyses
-from app.services import store
+from app.services import migrate, store
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
-    """Abre o banco na subida (`DATABASE_URL`) e fecha as conexões ao desligar."""
-    store.configure(store.database_url())
-    await store.create_tables()
+    """Migra e abre o banco na subida (`DATABASE_URL`) e fecha as conexões ao desligar."""
+    security.secret_key()  # falha cedo se `SECRET_KEY` não estiver definida
+    url = store.database_url()
+    # O Alembic usa o próprio loop; numa thread ele não briga com o da API.
+    await asyncio.to_thread(migrate.upgrade_head, url)
+    store.configure(url)
     yield
     await store.dispose()
 
