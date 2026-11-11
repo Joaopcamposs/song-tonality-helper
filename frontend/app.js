@@ -231,46 +231,47 @@ function renderReport(r, title) {
 
   const shift = el("div", undefined, "shift");
   const modulates = r.sections.length > 1;
-  const newKeyLabel = modulates ? "Novo tom (no início)" : "Novo tom";
-  shift.append(el("span", `${signed(r.shift)} semitons`, "shift-value"), el("span", `${newKeyLabel}: ${r.new_key}`, "new-key"));
+  shift.append(el("span", `${signed(r.shift)} semitons`, "shift-value"));
+  const first = r.sections[0];
+  const keys = el("div", undefined, "pair");
+  keys.append(
+    noteBox(modulates ? "Tom no início" : "Tom detectado", { name: `${first.tonic} ${first.mode}` }),
+    el("span", "→", "arrow"),
+    noteBox(modulates ? "Novo tom (no início)" : "Novo tom", { name: r.new_key }, "to"),
+  );
   const pair = el("div", undefined, "pair");
   pair.append(noteBox("Nota mais aguda hoje", r.top_note), el("span", "→", "arrow"), noteBox("Depois de transpor", r.new_top_note, "to"));
   const result = card(
     el("div", "Resultado", "eyebrow"),
     el("h2", title, "song"),
     shift,
+    keys,
     pair,
     el("p", `Alternativa: ${signed(r.alternative_shift)} semitons. Seu teto: ${noteText(r.ceiling)}.`, "muted"),
   );
   result.classList.add("result");
 
-  const first = r.sections[0];
-  const facts = el("div", undefined, "facts");
-  facts.append(
-    fact(`${first.tonic} ${first.mode}`, modulates ? "Tom no início" : "Tom detectado"),
+  const chips = el("div", undefined, "chips");
+  for (const t of r.top_times) chips.append(el("span", clock(t), "chip"));
+  const peak = card(
     fact(r.scale_degree, "Grau da nota mais aguda"),
+    el("h2", "Onde a nota mais aguda aparece"),
+    r.top_times.length ? chips : el("p", "Sem trechos marcados.", "muted"),
   );
-  const keyCard = card(facts);
+  peak.classList.add("result"); // mesmo espaçamento em grade do cartão de resultado
   if (first.relative) {
-    keyCard.append(el("p", `Também pode ser ${first.relative}: o relativo usa as mesmas notas e o áudio não separa os dois com certeza.`, "muted"));
+    peak.append(el("p", `Também pode ser ${first.relative}: o relativo usa as mesmas notas e o áudio não separa os dois com certeza.`, "muted"));
   }
   if (modulates) {
     const sectionChips = el("div", undefined, "chips");
     for (const k of r.sections) {
       sectionChips.append(el("span", `${clock(k.start)} · ${k.tonic} ${k.mode}${k.relative ? ` (ou ${k.relative})` : ""} → ${k.new_key}`, "chip"));
     }
-    keyCard.append(
+    peak.append(
       el("p", "A música muda de tom. O grau vale para o tom do início.", "muted"),
       sectionChips,
     );
   }
-
-  const chips = el("div", undefined, "chips");
-  for (const t of r.top_times) chips.append(el("span", clock(t), "chip"));
-  const times = card(
-    el("h2", "Onde a nota mais aguda aparece"),
-    r.top_times.length ? chips : el("p", "Sem trechos marcados.", "muted"),
-  );
 
   const bars = el("div", undefined, "bars");
   const max = Math.max(...r.ranking.map((row) => row.frames), 1);
@@ -291,7 +292,7 @@ function renderReport(r, title) {
     "warning",
   );
 
-  reportBox.append(result, keyCard, times, ranking, warning);
+  reportBox.append(result, peak, ranking, warning);
   reportBox.hidden = false;
 }
 
