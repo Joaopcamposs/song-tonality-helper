@@ -46,3 +46,10 @@ def test_transpose_chord():
     assert transpose_chord("B", 1) == "C"
     assert transpose_chord("C", -1) == "B"
     assert transpose_chord("F#m", -5) == "C#m"
+
+
+def test_single_note_tie_among_many_chords_still_prefers_key():
+    """Só a nota do pico soa: seis tríades empatam, e a do tom (F ou Dm em Dó maior) vence."""
+    only_f = [0.0] * 12
+    only_f[5] = 1.0
+    assert moment_chord([only_f] * 3, (0, "maior")) in {"F", "Dm"}

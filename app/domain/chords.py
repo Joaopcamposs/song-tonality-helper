@@ -57,10 +57,12 @@ def _best(
     if norm == 0:
         return None
     scores = [float(t @ vector / (np.linalg.norm(t) * norm)) for t in _TEMPLATES]
-    first, second = (int(i) for i in np.argsort(scores)[::-1][:2])
-    if key and scores[first] - scores[second] < TIE_MARGIN:
-        if not _in_key(_CHORDS[first], key) and _in_key(_CHORDS[second], key):
-            first = second
+    order = [int(i) for i in np.argsort(scores)[::-1]]
+    first = order[0]
+    if key and not _in_key(_CHORDS[first], key):
+        # Empate: vence o acorde do tom de maior correlação entre os que ficam na margem.
+        tied = (i for i in order if scores[first] - scores[i] < TIE_MARGIN)
+        first = next((i for i in tied if _in_key(_CHORDS[i], key)), first)
     return _CHORDS[first], scores[first]
 
 
