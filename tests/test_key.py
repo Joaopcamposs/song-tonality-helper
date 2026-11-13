@@ -83,3 +83,14 @@ def test_tie_goes_to_the_relative_with_the_stronger_dominant():
     c_major = key_sections([_chroma_for({**base, 4: 0.5, 7: 1.0})] * 3)[0]
     assert (a_minor.tonic_pc, a_minor.mode) == (9, "menor")
     assert (c_major.tonic_pc, c_major.mode) == (0, "maior")
+
+
+def test_excursion_that_returns_is_not_a_modulation():
+    # Dois trechos em outro tom (ênfase na dominante) e a volta ao tom de antes: segue um tom só.
+    windows = [_window_in(7)] * 7 + [_window_in(2)] * 2 + [_window_in(7)] * 5
+    assert [s.tonic_pc for s in key_sections(windows)] == [7]
+
+
+def test_long_stay_in_another_key_that_returns_is_still_a_modulation():
+    windows = [_window_in(7)] * 5 + [_window_in(2)] * 4 + [_window_in(7)] * 5
+    assert [s.tonic_pc for s in key_sections(windows)] == [7, 2, 7]

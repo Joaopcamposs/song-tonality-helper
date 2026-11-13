@@ -13,6 +13,7 @@ _MINOR = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3
 
 MIN_SCORE = 0.5  # janela com correlação menor que isso (silêncio, ruído) não decide o tom
 MIN_SECTION_WINDOWS = 2  # trecho menor que isso é empréstimo de acorde, não modulação
+MAX_EXCURSION_WINDOWS = 2  # trecho assim de curto que volta ao tom anterior é ênfase, não modulação
 DOMINANT_MARGIN = 0.15  # dominante do relativo precisa ser 15% mais forte para ele vencer o empate
 MAX_RELATIVE_GAP = 0.2  # o relativo só vira alternativa se ficar a no máximo isso do tom escolhido
 
@@ -127,6 +128,16 @@ def key_sections(windows: Sequence[Sequence[float]]) -> list[KeySection]:
             merged[-1].scores += run.scores
         else:
             merged.append(run)
+    settled: list[_Run] = []
+    for run in merged:
+        short_detour = len(settled) >= 2 and settled[-1].windows <= MAX_EXCURSION_WINDOWS
+        if short_detour and settled[-2].same_key(run.best):
+            excursion = settled.pop()
+            settled[-1].windows += excursion.windows + run.windows
+            settled[-1].scores += run.scores
+        else:
+            settled.append(run)
+    merged = settled
     while len(merged) > 1 and merged[0].windows < MIN_SECTION_WINDOWS:  # curto logo no começo
         merged[1].first_window = merged[0].first_window
         merged[1].windows += merged[0].windows
