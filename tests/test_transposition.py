@@ -10,7 +10,7 @@ def test_g_down_five_is_d():
 
 
 def test_scale_degree_b_in_g_is_third():
-    assert scale_degree(71, 7) == "3ª"
+    assert scale_degree(71, 7) == "3º"
 
 
 def test_shift_never_goes_above_the_ceiling():

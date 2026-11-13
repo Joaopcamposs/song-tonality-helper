@@ -26,7 +26,7 @@ def test_dois_passarinhos_report():
         (0.0, "G", "maior", "D maior")
     ]
     assert report.new_key == "D maior"
-    assert report.scale_degree == "3ª"
+    assert report.scale_degree == "3º"
     assert report.top_note.name == "B4"
     assert report.new_top_note.name == "F#4"
     assert report.ceiling.name == "F#4"

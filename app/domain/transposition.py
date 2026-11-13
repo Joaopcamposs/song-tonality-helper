@@ -1,6 +1,6 @@
 """Cálculo do deslocamento em semitons, do novo tom e do grau da nota na escala."""
 
-_DEGREES = ["tônica", "♭2ª", "2ª", "♭3ª", "3ª", "4ª", "♭5ª", "5ª", "♭6ª", "6ª", "♭7ª", "7ª"]
+_DEGREES = ["tônica", "♭2º", "2º", "♭3º", "3º", "4º", "♭5º", "5º", "♭6º", "6º", "♭7º", "7º"]
 
 
 def shift_semitones(top_midi: int, ceiling_midi: int) -> int:
