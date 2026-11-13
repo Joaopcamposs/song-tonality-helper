@@ -11,13 +11,16 @@ import logging
 import os
 import signal
 import tempfile
+from collections.abc import Callable
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import get_context
 from pathlib import Path
 
 from sqlalchemy import delete
 
+from app.domain import pitch
 from app.domain.errors import DomainError, DownloadError
 from app.domain.features import ALGO_VERSION, AudioFeatures
-from app.domain.pitch import analyze_audio
 from app.services import jobs, store
 from app.services.download import DownloadedAudio, download_audio, redact
 from app.services.proxy import ProxyConfig
@@ -26,6 +29,21 @@ from app.services.store import Job
 logger = logging.getLogger(__name__)
 
 EXTRACT_TIMEOUT_SECONDS = 60  # prazo de toda a extração (download + análise) feita pela API
+
+
+def _isolated[T, R](func: Callable[[T], R], arg: T) -> R:
+    """Executa `func(arg)` num processo filho novo e devolve o resultado (ou levanta o erro dele).
+
+    A análise de áudio passa de 900 MB no pico; num processo filho, essa memória volta ao
+    sistema quando ele termina, em vez de ficar retida no worker entre uma música e outra.
+    """
+    with ProcessPoolExecutor(max_workers=1, mp_context=get_context("spawn")) as pool:
+        return pool.submit(func, arg).result()
+
+
+def analyze_audio(path: Path) -> AudioFeatures:
+    """Analisa o áudio num processo filho (ver `_isolated`)."""
+    return _isolated(pitch.analyze_audio, path)
 
 
 async def _finish(video_id: str) -> None:
