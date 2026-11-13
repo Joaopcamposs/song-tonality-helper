@@ -9,8 +9,10 @@ import librosa
 import numpy as np
 from scipy.signal import medfilt
 
+from app.domain.chords import AFTER_SECONDS, BEFORE_SECONDS, WINDOW_SECONDS, moment_chord
 from app.domain.errors import NoMelodyError
 from app.domain.features import CHROMA_WINDOW_SECONDS, AudioFeatures
+from app.domain.key import KeySection, key_sections
 
 BINS_PER_OCTAVE = 36  # 3 divisões por semitom na CQT
 HOP = 512
@@ -89,6 +91,27 @@ def _chroma_windows(chroma: np.ndarray) -> list[list[float]]:
     return [chroma[:, s : s + size].mean(axis=1).tolist() for s in starts]
 
 
+def _chords_at(
+    chroma: np.ndarray, times: list[float], sections: list[KeySection]
+) -> list[str | None]:
+    """Acorde provável de cada instante, pelo chroma de `t - BEFORE` a `t + AFTER` em janelas.
+
+    O tom da seção em que o instante cai só desempata acordes parecidos.
+    """
+    frames_per_second = SAMPLE_RATE / HOP
+    size = round(WINDOW_SECONDS * frames_per_second)
+    chords: list[str | None] = []
+    for t in times:
+        start = max(0, round((t - BEFORE_SECONDS) * frames_per_second))
+        end = min(chroma.shape[1], round((t + AFTER_SECONDS) * frames_per_second))
+        windows = [
+            chroma[:, s : min(s + size, end)].mean(axis=1).tolist() for s in range(start, end, size)
+        ]
+        section = [k for k in sections if k.start <= t][-1]
+        chords.append(moment_chord(windows, (section.tonic_pc, section.mode)))
+    return chords
+
+
 def analyze_audio(path: Path) -> AudioFeatures:
     """Analisa o arquivo e devolve a nota mais aguda sustentada, o ranking e o chroma por janela."""
     y, _ = librosa.load(path, sr=SAMPLE_RATE, mono=True)
@@ -103,4 +126,6 @@ def analyze_audio(path: Path) -> AudioFeatures:
 
     top_frames = np.flatnonzero(strong & (rounded == top_midi))
     times = [round(t, 1) for t in _runs(top_frames)[:MAX_TIMES]]
-    return AudioFeatures(top_midi, ranking, times, _chroma_windows(chroma))
+    windows = _chroma_windows(chroma)
+    chords = _chords_at(chroma, times, key_sections(windows))
+    return AudioFeatures(top_midi, ranking, times, windows, chords)
