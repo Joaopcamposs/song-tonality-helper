@@ -119,9 +119,12 @@ label > input, label > select { margin-top: 6px; color: var(--text); font-weight
 .note span { color: var(--muted); font-size: .8rem; }
 .note.to { border-color: var(--accent); }
 
-.fact { padding: 12px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); }
-.fact b { display: block; font: 700 1.1rem ui-rounded, system-ui, sans-serif; }
-.fact span { color: var(--muted); font-size: .8rem; }
+.strip {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 6px 12px;
+  border-radius: 12px; background: var(--bg); border: 1px solid var(--line);
+}
+.strip span { color: var(--muted); font-size: .8rem; }
+.strip b { font: 700 1rem ui-rounded, system-ui, sans-serif; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { padding: 4px 12px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }

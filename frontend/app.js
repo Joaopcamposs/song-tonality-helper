@@ -334,9 +334,9 @@ function noteBox(label, note, className) {
   return box;
 }
 
-function fact(value, label) {
-  const box = el("div", undefined, "fact");
-  box.append(el("b", value), el("span", label));
+function strip(label, value) {
+  const box = el("div", undefined, "strip");
+  box.append(el("span", label), el("b", value));
   return box;
 }
 
@@ -361,6 +361,7 @@ function renderReport(r, title) {
     shift,
     keys,
     pair,
+    strip("Grau da nota mais aguda", r.scale_degree),
     el("p", `Alternativa: ${signed(r.alternative_shift)} semitons. Seu teto: ${noteText(r.ceiling)}.`, "muted"),
   );
   result.classList.add("result");
@@ -371,7 +372,6 @@ function renderReport(r, title) {
     chips.append(el("span", chord ? `${clock(t)} · ${chord.original} → ${chord.new}` : clock(t), "chip"));
   });
   const peak = card(
-    fact(r.scale_degree, "Grau da nota mais aguda"),
     el("h2", "Onde a nota mais aguda aparece"),
     r.top_times.length ? chips : el("p", "Sem trechos marcados.", "muted"),
   );
