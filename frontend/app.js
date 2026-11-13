@@ -388,7 +388,7 @@ function renderReport(r, title) {
       sectionChips.append(el("span", `${clock(k.start)} · ${k.tonic} ${k.mode}${k.relative ? ` (ou ${k.relative})` : ""} → ${k.new_key}`, "chip"));
     }
     peak.append(
-      el("p", "Tom de cada trecho: original → novo. O grau vale para o primeiro.", "muted"),
+      el("p", "A música modula. Tom de cada trecho: original → novo. O grau vale para o primeiro.", "muted"),
       sectionChips,
     );
   }
