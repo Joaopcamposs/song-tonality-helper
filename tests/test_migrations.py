@@ -34,6 +34,14 @@ async def test_upgrade_creates_all_tables():
                 "user_analyses",
                 "alembic_version",
             }
+            columns = await connection.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema = :s AND table_name = 'analyses'"
+                ),
+                {"s": store.SCHEMA},
+            )
+            assert "top_chords" in {row[0] for row in columns}
             insert = text(
                 "INSERT INTO tonalidade.users (id, name, email, password_hash, created_at) "
                 "VALUES (gen_random_uuid(), 'a', 'a@x.com', 'h', now())"

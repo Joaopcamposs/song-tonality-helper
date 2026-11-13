@@ -14,6 +14,7 @@ def _features(top_midi: int = 71) -> AudioFeatures:
         ranking=[(71, 150), (67, 400)],
         top_times=[12.3],
         chroma_windows=[[float(i) / 10 for i in range(12)]],
+        top_chords=["Em"],
     )
 
 
