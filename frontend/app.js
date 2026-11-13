@@ -377,7 +377,7 @@ function renderReport(r, title) {
   );
   peak.classList.add("result"); // mesmo espaçamento em grade do cartão de resultado
   if (r.top_chords.some((c) => c)) {
-    peak.append(el("p", "Acorde provável, estimado do áudio (tom original → novo tom): só maiores e menores, e pode confundir relativos ou acordes com sétima.", "muted"));
+    peak.append(el("p", "Acorde provável, estimado do áudio (tom original → novo tom): maiores, menores e dominantes com sétima (X7); pode confundir relativos e outras sétimas.", "muted"));
   }
   if (first.relative) {
     peak.append(el("p", `Também pode ser ${first.relative}: o relativo usa as mesmas notas e o áudio não separa os dois com certeza.`, "muted"));

@@ -6,11 +6,11 @@ Recorte do spec `2026-10-22-letra-acordes-design.md`: só os acordes dos momento
 O relatório diz o tom e onde a nota mais aguda toca (`top_times`), mas não o que a harmonia faz ali. Quem canta e toca precisa do acorde daquele ponto, no tom original e no novo. Ex.: tom Em, pico B4, acorde provável Em.
 
 ## Objetivos
-- Para cada `top_time`, um acorde provável (24 tríades: maiores e menores), no tom original e no novo.
+- Para cada `top_time`, um acorde provável (36 candidatos: tríades maiores e menores e dominantes com sétima, `X7`), no tom original e no novo.
 - Acorde calculado na análise e guardado só como nome; a versão no novo tom sai na leitura (acorde original + `shift`).
 
 ## Não objetivos
-- Sétimas, tensões, inversões, baixo, cifra completa.
+- Outras sétimas (maior, menor), tensões, inversões, baixo, cifra completa.
 - Tessitura e letra (fases seguintes).
 - Guardar chroma fino da música inteira.
 
@@ -44,4 +44,4 @@ O relatório diz o tom e onde a nota mais aguda toca (`top_times`), mas não o q
 
 ## Limites conhecidos (aparecem na tela)
 - Estimativa: áudio misturado, voz e instrumentos juntos.
-- Só maiores e menores; pode confundir relativos e acordes com sétima.
+- Só maiores, menores e dominantes com sétima; a sétima dominante só vence quando soa com clareza (penalidade fora do V do tom).

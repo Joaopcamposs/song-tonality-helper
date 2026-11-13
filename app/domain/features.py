@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 
 # Sobe quando o critério da análise muda, para refazer os registros guardados.
-ALGO_VERSION = 3
+ALGO_VERSION = 4
 
 # Duração de cada janela do chroma guardado; o tom é detectado janela a janela.
 CHROMA_WINDOW_SECONDS = 10.0

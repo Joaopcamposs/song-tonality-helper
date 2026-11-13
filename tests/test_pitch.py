@@ -39,7 +39,7 @@ def test_short_audio_still_has_one_window(make_wav):
 
 
 def test_algo_version_is_defined():
-    assert ALGO_VERSION == 3
+    assert ALGO_VERSION == 4
 
 
 def test_silence_raises_no_melody(make_wav):
