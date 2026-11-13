@@ -373,12 +373,10 @@ function renderReport(r, title) {
   });
   const peak = card(
     el("h2", "Onde a nota mais aguda aparece"),
+    ...(r.top_chords.some((c) => c) ? [el("p", "Acorde provável: tom original → novo.", "muted")] : []),
     r.top_times.length ? chips : el("p", "Sem trechos marcados.", "muted"),
   );
   peak.classList.add("result"); // mesmo espaçamento em grade do cartão de resultado
-  if (r.top_chords.some((c) => c)) {
-    peak.append(el("p", "Acorde provável: tom original → novo.", "muted"));
-  }
   if (first.relative) {
     peak.append(el("p", `Também pode ser ${first.relative}: o relativo usa as mesmas notas e o áudio não separa os dois com certeza.`, "muted"));
   }
