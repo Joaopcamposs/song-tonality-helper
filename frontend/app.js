@@ -361,7 +361,7 @@ function renderReport(r, title) {
     shift,
     keys,
     pair,
-    strip("Grau da nota mais aguda", r.scale_degree),
+    strip(modulates ? "Grau no tom do início" : "Grau da nota mais aguda", r.scale_degree),
     el("p", `Alternativa: ${signed(r.alternative_shift)} semitons. Seu teto: ${noteText(r.ceiling)}.`, "muted"),
   );
   result.classList.add("result");
@@ -386,7 +386,7 @@ function renderReport(r, title) {
       sectionChips.append(el("span", `${clock(k.start)} · ${k.tonic} ${k.mode}${k.relative ? ` (ou ${k.relative})` : ""} → ${k.new_key}`, "chip"));
     }
     peak.append(
-      el("p", "A música modula. Tom de cada trecho: original → novo. O grau vale para o primeiro.", "muted"),
+      el("p", "A música modula. Tom de cada trecho: original → novo.", "muted"),
       sectionChips,
     );
   }
