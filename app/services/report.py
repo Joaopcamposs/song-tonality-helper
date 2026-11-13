@@ -1,9 +1,10 @@
 """Monta o relatório final a partir das features do áudio e do teto escolhido."""
 
+from app.domain.chords import transpose_chord
 from app.domain.features import AudioFeatures
 from app.domain.key import key_sections
 from app.domain.notes import note_label, pitch_class_name
-from app.domain.schemas import KeySectionOut, NoteOut, RankedNote, Report
+from app.domain.schemas import ChordOut, KeySectionOut, NoteOut, RankedNote, Report
 from app.domain.transposition import scale_degree, shift_semitones, transpose_tonic
 
 
@@ -15,6 +16,16 @@ def note_out(midi: int) -> NoteOut:
 def _new_key(tonic_pc: int, mode: str, shift: int) -> str:
     """Nome do tom (tônica e modo) depois de deslocar `shift` semitons."""
     return f"{pitch_class_name(transpose_tonic(tonic_pc, shift))} {mode}"
+
+
+def _top_chords(features: AudioFeatures, shift: int) -> list[ChordOut | None]:
+    """Acorde de cada pico nos dois tons; vazio se a lista não acompanha os instantes."""
+    if len(features.top_chords) != len(features.top_times):
+        return []
+    return [
+        ChordOut(original=chord, new=transpose_chord(chord, shift)) if chord else None
+        for chord in features.top_chords
+    ]
 
 
 def build_report(features: AudioFeatures, ceiling_midi: int) -> Report:
@@ -29,6 +40,7 @@ def build_report(features: AudioFeatures, ceiling_midi: int) -> Report:
             RankedNote(note=note_out(midi), frames=frames) for midi, frames in features.ranking
         ],
         top_times=features.top_times,
+        top_chords=_top_chords(features, shift),
         sections=[
             KeySectionOut(
                 start=round(s.start, 1),

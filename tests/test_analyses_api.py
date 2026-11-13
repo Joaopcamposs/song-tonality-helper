@@ -22,7 +22,11 @@ def _features() -> AudioFeatures:
     for pc, weight in {7: 1.0, 11: 0.8, 2: 0.9, 9: 0.4, 0: 0.5, 4: 0.5, 6: 0.3}.items():
         profile[pc] = weight
     return AudioFeatures(
-        top_midi=71, ranking=[(71, 150)], top_times=[12.3], chroma_windows=[profile]
+        top_midi=71,
+        ranking=[(71, 150)],
+        top_times=[12.3],
+        chroma_windows=[profile],
+        top_chords=["Em"],
     )
 
 
@@ -66,6 +70,7 @@ async def test_new_video_is_202_then_done_with_report(client):
     assert body["status"] == "done"
     assert body["title"] == "Dois Passarinhos"
     assert body["report"]["new_key"] == "D maior"
+    assert body["report"]["top_chords"] == [{"original": "Em", "new": "Bm"}]
     assert not downloads[0].exists()
 
 

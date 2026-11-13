@@ -1,4 +1,7 @@
+from dataclasses import replace
+
 from app.domain.features import AudioFeatures
+from app.domain.schemas import ChordOut
 from app.services.report import build_report
 
 
@@ -7,7 +10,11 @@ def _g_major_features() -> AudioFeatures:
     for pc, weight in {7: 1.0, 11: 0.8, 2: 0.9, 9: 0.4, 0: 0.5, 4: 0.5, 6: 0.3}.items():
         profile[pc] = weight
     return AudioFeatures(
-        top_midi=71, ranking=[(71, 150), (67, 400)], top_times=[12.3], chroma_windows=[profile] * 3
+        top_midi=71,
+        ranking=[(71, 150), (67, 400)],
+        top_times=[12.3],
+        chroma_windows=[profile] * 3,
+        top_chords=["Em"],
     )
 
 
@@ -54,3 +61,18 @@ def test_alternative_is_the_octave_up_when_shift_goes_down():
     report = build_report(features, ceiling_midi=61)
     assert (report.shift, report.alternative_shift) == (-9, 3)
     assert report.new_top_note.name == "C#4"
+
+
+def test_top_chord_comes_in_both_keys():
+    report = build_report(_g_major_features(), ceiling_midi=66)  # shift -5
+    assert report.top_chords == [ChordOut(original="Em", new="Bm")]
+
+
+def test_chord_without_sound_stays_empty():
+    features = replace(_g_major_features(), top_chords=[None])
+    assert build_report(features, ceiling_midi=66).top_chords == [None]
+
+
+def test_old_record_without_chords_reports_none():
+    features = replace(_g_major_features(), top_chords=[])  # registro antigo
+    assert build_report(features, ceiling_midi=66).top_chords == []

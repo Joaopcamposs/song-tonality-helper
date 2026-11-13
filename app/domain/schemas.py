@@ -32,6 +32,13 @@ class KeySectionOut(BaseModel):
     relative: str | None = None  # tom relativo quase tão provável (mesmas notas), ex.: "A menor"
 
 
+class ChordOut(BaseModel):
+    """Acorde provável de um momento agudo: no tom original e no novo tom."""
+
+    original: str
+    new: str
+
+
 class Report(BaseModel):
     """Relatório final da análise de uma música."""
 
@@ -39,6 +46,7 @@ class Report(BaseModel):
     ceiling: NoteOut
     ranking: list[RankedNote]
     top_times: list[float]
+    top_chords: list[ChordOut | None]  # paralelo a top_times; vazio se não houver acordes
     sections: list[KeySectionOut]
     shift: int
     alternative_shift: int
