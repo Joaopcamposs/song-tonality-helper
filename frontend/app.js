@@ -366,13 +366,19 @@ function renderReport(r, title) {
   result.classList.add("result");
 
   const chips = el("div", undefined, "chips");
-  for (const t of r.top_times) chips.append(el("span", clock(t), "chip"));
+  r.top_times.forEach((t, i) => {
+    const chord = r.top_chords[i];
+    chips.append(el("span", chord ? `${clock(t)} · ${chord.original} → ${chord.new}` : clock(t), "chip"));
+  });
   const peak = card(
     fact(r.scale_degree, "Grau da nota mais aguda"),
     el("h2", "Onde a nota mais aguda aparece"),
     r.top_times.length ? chips : el("p", "Sem trechos marcados.", "muted"),
   );
   peak.classList.add("result"); // mesmo espaçamento em grade do cartão de resultado
+  if (r.top_chords.some((c) => c)) {
+    peak.append(el("p", "Acorde provável, estimado do áudio (tom original → novo tom): só maiores e menores, e pode confundir relativos ou acordes com sétima.", "muted"));
+  }
   if (first.relative) {
     peak.append(el("p", `Também pode ser ${first.relative}: o relativo usa as mesmas notas e o áudio não separa os dois com certeza.`, "muted"));
   }
