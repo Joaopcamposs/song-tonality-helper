@@ -376,6 +376,9 @@ function renderReport(r, title) {
     r.top_times.length ? chips : el("p", "Sem trechos marcados.", "muted"),
   );
   peak.classList.add("result"); // mesmo espaçamento em grade do cartão de resultado
+  if (r.top_chords.some((c) => c)) {
+    peak.append(el("p", "Acorde provável: tom original → novo.", "muted"));
+  }
   if (first.relative) {
     peak.append(el("p", `Também pode ser ${first.relative}: o relativo usa as mesmas notas e o áudio não separa os dois com certeza.`, "muted"));
   }
@@ -384,7 +387,10 @@ function renderReport(r, title) {
     for (const k of r.sections) {
       sectionChips.append(el("span", `${clock(k.start)} · ${k.tonic} ${k.mode}${k.relative ? ` (ou ${k.relative})` : ""} → ${k.new_key}`, "chip"));
     }
-    peak.append(sectionChips);
+    peak.append(
+      el("p", "Tom de cada trecho: original → novo. O grau vale para o primeiro.", "muted"),
+      sectionChips,
+    );
   }
 
   const bars = el("div", undefined, "bars");
